@@ -1,0 +1,8 @@
+*.pyc
+
+*.xyz
+*.txt
+*.npy
+*.npz
+
+*.swp
