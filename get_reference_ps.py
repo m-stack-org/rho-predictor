@@ -15,6 +15,8 @@ import numpy as np
 import ase.io
 import equistore.io
 
+def ps_normalize_inplace(vals):
+    vals /= np.sqrt(np.linalg.norm(vals @ vals.T))
 
 def get_ref_idx(mollist, refs):
     mols = []
@@ -32,7 +34,7 @@ def get_ref_idx(mollist, refs):
     return mols, idx
 
 
-def prepare_blocks_dict(idx):
+def merge_ref_ps(idx, normalize=False):
 
     elements = set([q for mol in mols for q in mol.numbers])
     keys = [(l, q) for q in elements for l in range(lmax+1)]
@@ -56,7 +58,10 @@ def prepare_blocks_dict(idx):
             key = (l, q)
             block = tensor.block(spherical_harmonics_l=l, species_center=q)
             isamp = block.samples.position((0, atom_id))
-            blocks[key].append(np.copy(block.values[isamp,:,:]))
+            vals  = np.copy(block.values[isamp,:,:])
+            if normalize:
+                ps_normalize_inplace(vals)
+            blocks[key].append(vals)
             block_samp_label_vals[key].append(iref)
             if key not in block_comp_labels:
                 block_comp_labels[key] = block.components
@@ -85,7 +90,7 @@ if __name__=='__main__':
     refs = np.loadtxt(mydir+'refs_selection_1000.txt', dtype=int)
 
     mols, idx = get_ref_idx(mollist, refs)
-    tensor, ref_q = prepare_blocks_dict(idx)
+    tensor, ref_q = merge_ref_ps(idx, normalize=True)
     print(tensor)
 
     equistore.io.save('reference.npz', tensor)
