@@ -4,5 +4,6 @@
 *.txt
 *.npy
 *.npz
+*.molden
 
 *.swp
