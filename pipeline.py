@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import ase.io
 import equistore.io
 import qstack
+import qstack.equio
 from lsoap import generate_lambda_soap_wrapper
+from get_reference_ps import ps_normalize_inplace
+
+def normalize_tensormap(soap):
+    for key, block in soap:
+        for samp in block.samples:
+            isamp = block.samples.position(samp)
+            ps_normalize_inplace(block.values[isamp,:,:])
 
 def count_elements(mylist, dictionary=False):
     if dictionary is False:
@@ -34,15 +41,14 @@ def compute_kernel(atom_charges, soap, soap_ref):
         # Normalize with zeta=2; should be in descendant order because l=0 is used
         for l in range(lmax, -1, -1):
             kernel[iat][l] = kernel[iat][l] * kernel[iat][0]
+
     return kernel
 
 
 
 
-def compute_prediction(mol):
+def compute_prediction(mol, ref_q, kernel, weights, dirty=False):
 
-    # TODO reorder p-orbitals after
-    # TODO for some reason the old PS are already normalized (norm of self dot product is 1 for any L)
     # c_{iat, l, m, n} = K_{iat/ref, l, m/m1} * w_{ref, l, n, m1}
 
     c = np.zeros(mol.nao)
@@ -51,93 +57,76 @@ def compute_prediction(mol):
         q = mol.atom_charge(iat)
         refs = np.where(ref_q == q)[0]
 
-
-        llist = [mol.bas_angular(bas_id) for bas_id in mol.atom_shell_ids(iat)]
+        llist = qstack.equio._get_llist(q, mol)
         if llist!=sorted(llist):
             raise NotImplementedError('Cannot work with a basis with L not in order')
+        n_for_l = count_elements(llist, dictionary=True)
 
-        lmax = max(llist)
-
-        print(llist)
-
-
-        counter = count_elements(llist)
-
-
-        print(counter)
-
-        exit(0)
-
-        n_tot = np.zeros(lmax+1, dtype=int)  # counter for radial channels for this l
-
-        for bas_id in mol.atom_shell_ids(iat):
-            l  = mol.bas_angular(bas_id)
-            nc = mol.bas_nctr(bas_id)
-            block = weights.block(spherical_harmonics_l=l, element=q)
-            msize = 2*l+1
-            for n in range(nc):
-                id_prop = block.properties.position((n_tot[l],))
-
-                w = block.values[:,:,id_prop]
-                k = kernel[iat][l][:,:,:]
-                c[i:i+msize] = np.einsum('rmM,rM->m',  k,  w)
-                i += msize
-                n_tot[l]+=1
-    print(c)
+        for l in n_for_l.keys():
+            di = (2*l+1) * n_for_l[l]
+            wblock = weights.block(spherical_harmonics_l=l, element=q)
+            if (not dirty) or (dirty and (l in [0])):
+                c[i:i+di] = np.einsum('rmM,rMn->nm', kernel[iat][l], wblock.values).flatten()
+            i += di
     return c
 
 
+def main():
 
-elements = [1, 6, 7, 8]
-molfile = "1.xyz"
-molfile = "./H6C2____monA_0932.xyz"
-basis = 'ccpvqz jkfit'
-#basis = 'sto3g'
-mol = qstack.compound.xyz_to_mol(molfile, basis=basis)
+    molfile = "1.xyz"
+    molfile = "./H6C2____monA_0932.xyz"
+    molfile = "./H6C2.xyz"
+    moldenfile = 'H6C2'
+    normalize = False
+    compare = False
+    dirty = True
 
-if 0:
-    mol0 = qstack.compound.xyz_to_mol(molfile, basis='ccpvdz')
-    dm   = qstack.fields.dm.get_converged_dm(mol0, xc="pbe")
-    auxmol, c0 = qstack.fields.decomposition.decompose(mol0, dm, 'cc-pvqz jkfit')
-    print(c0)
-    exit(0)
+    refsoapfile = 'reference_soap_norm.npz' if normalize else 'reference_soap.npz'
+    refqfile    = 'reference_q.npy'
+    weightsfile = 'weights.npz'
+    basis = 'ccpvqz jkfit'
+
+    if compare:
+        mol0 = qstack.compound.xyz_to_mol(molfile, basis='ccpvdz')
+        dm   = qstack.fields.dm.get_converged_dm(mol0, xc="pbe")
+        auxmol, c0 = qstack.fields.decomposition.decompose(mol0, dm, 'cc-pvqz jkfit')
+        qstack.fields.density2file.coeffs_to_molden(auxmol, c0, moldenfile+'_ref.molden')
+
+    # Load the molecule
+    mol = qstack.compound.xyz_to_mol(molfile, basis=basis)
+
+    # Compute λ-SOAP for the target molecule
+    rascal_hypers = {
+        "cutoff": 4.0,
+        "max_radial": 8,
+        "max_angular": 6,
+        "atomic_gaussian_width": 0.3,
+        "radial_basis": {"Gto": {}},
+        "cutoff_function": {"ShiftedCosine": {"width": 0.5}},
+        "center_atom_weight": 1.0,
+    }
+    elements = [1, 6, 7, 8]
+    soap = generate_lambda_soap_wrapper(molfile, rascal_hypers, elements)
+    if normalize:
+        normalize_tensormap(soap)
+
+    # Load regression weights
+    weights = equistore.io.load(weightsfile)
+    ref_q = np.load(refqfile)
+
+    # Load λ-SOAP for the reference environments
+    soap_ref = equistore.io.load(refsoapfile)
+
+    # Compute the kernel
+    kernel = compute_kernel(mol.atom_charges(), soap, soap_ref)
+
+    # Compute the prediction
+    c = compute_prediction(mol, ref_q, kernel, weights, dirty=dirty)
+
+    # Save the prediction
+    c = qstack.tools.gpr2pyscf(mol, c)
+    qstack.fields.density2file.coeffs_to_molden(mol, c, moldenfile+'.molden')
 
 
-# Compute λ-SOAP for the target molecule
-rascal_hypers = {
-    "cutoff": 4.0,
-    "max_radial": 8,
-    "max_angular": 6,
-    "atomic_gaussian_width": 0.3,
-    "radial_basis": {"Gto": {}},
-    "cutoff_function": {"ShiftedCosine": {"width": 0.5}},
-    "center_atom_weight": 1.0,
-}
-soap = generate_lambda_soap_wrapper(molfile, rascal_hypers, elements)
-
-# Load regression weights
-weights = equistore.io.load('weights.npz')
-ref_q = np.load('reference_q.npy')
-
-compute_prediction(mol)
-
-# Load λ-SOAP for the reference environments
-soap_ref = equistore.io.load('reference_soap.npz')
-
-
-
-# Compute the kernel
-kernel = compute_kernel(mol.atom_charges(), soap, soap_ref)
-np.save('kernel.npy', kernel)
-
-# Compute the prediction
-compute_prediction(mol)
-pass
-
-# Correct the N
-pass
-
-# Compute some properties
-pass
-
-
+if __name__=='__main__':
+    main()
