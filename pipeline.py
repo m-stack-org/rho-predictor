@@ -74,7 +74,8 @@ def main():
     kernel = compute_kernel(mol.atom_charges(), soap, soap_ref)
 
     # Compute the prediction
-    c = compute_prediction(mol, kernel, weights, averages)
+    c_tm = compute_prediction(mol, kernel, weights, averages)
+    c = qstack.equio.tensormap_to_vector(mol, c_tm)
     print(c[:16])
 
     # Save the prediction

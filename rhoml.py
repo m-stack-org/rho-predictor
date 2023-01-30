@@ -24,7 +24,7 @@ def compute_kernel(atom_charges, soap, soap_ref):
     for l in range(lmax+1):
         for q in elements:
             key = (l, q)
-            kernel[key] = [None for _ in atom_charges]
+            kernel[key] = []
 
 
     for iat, q in enumerate(atom_charges):
@@ -38,7 +38,7 @@ def compute_kernel(atom_charges, soap, soap_ref):
             # Normalize with zeta=2
             if l==0:
                 factor = pre_kernel
-            kernel[(l, q)][iat] = pre_kernel * factor
+            kernel[(l, q)].append( pre_kernel * factor )
     return kernel
 
 
@@ -46,23 +46,25 @@ def compute_prediction(mol, kernel, weights, averages=None):
 
     # c_{iat, l, m, n} = K_{iat/ref, l, m/m1} * w_{ref, l, n, m1}
 
-    n_for_l = {}
-    for q in set(mol.atom_charges()):
-        llist = qstack.equio._get_llist(q, mol)
-        if llist!=sorted(llist):
-            raise NotImplementedError('Cannot work with a basis with L not in order')
-        n_for_l[q] = count_elements(llist, dictionary=True)
+    elements = set(mol.atom_charges())
+    coeffs = qstack.equio.vector_to_tensormap(mol, np.zeros(mol.nao))
 
-    c = np.zeros(mol.nao)
-    i = 0
-    for iat in range(mol.natm):
-        q = mol.atom_charge(iat)
-        for l in n_for_l[q].keys():
-            di = (2*l+1) * n_for_l[q][l]
+    for q in elements:
+        for l in sorted(set(qstack.equio._get_llist(q, mol))):
             wblock = weights.block(spherical_harmonics_l=l, element=q)
-            c[i:i+di] = np.einsum('rmM,rMn->nm', kernel[(l,q)][iat], wblock.values).flatten()
-            if l==0 and averages:
-                c[i:i+di] += averages[q]
-            i += di
-    c = qstack.tools.gpr2pyscf(mol, c)
-    return c
+            cblock = coeffs.block(spherical_harmonics_l=l, element=q)
+            kblock = kernel[(l,q)]
+            for sample in cblock.samples:
+                cpos = cblock.samples.position(sample)
+                kpos = cpos # TODO
+                cblock.values[cpos,:,:] = np.einsum('rmM,rMn->mn', kblock[kpos], wblock.values)
+
+            if averages and l==0:
+                cblock.values[:,:,:] = cblock.values + averages[q]
+
+    return coeffs
+
+
+
+
+
