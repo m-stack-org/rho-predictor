@@ -19,18 +19,26 @@ def compute_kernel(atom_charges, soap, soap_ref):
     lmax   = max(np.array([list(key) for key in soap.keys])[:,0])
     kernel = [[None for l in range(lmax+1)] for _ in atom_charges]
 
+    kernel = {}
+    elements = sorted(set(atom_charges))
+    for l in range(lmax+1):
+        for q in elements:
+            key = (l, q)
+            kernel[key] = [None for _ in atom_charges]
+
+
     for iat, q in enumerate(atom_charges):
-        # Compute the kernel
         for l in range(lmax+1):
             block = soap.block(spherical_harmonics_l=l, species_center=q)
             isamp = block.samples.position((0, iat))
             vals  = block.values[isamp,:,:]
             block_ref = soap_ref.block(spherical_harmonics_l=l, species_center=q)
             vals_ref  = block_ref.values
-            kernel[iat][l] = np.einsum('rmx,Mx->rMm', vals_ref, vals)
-        # Normalize with zeta=2; should be in descendant order because l=0 is used
-        for l in range(lmax, -1, -1):
-            kernel[iat][l] = kernel[iat][l] * kernel[iat][0]
+            pre_kernel = np.einsum('rmx,Mx->rMm', vals_ref, vals)
+            # Normalize with zeta=2
+            if l==0:
+                factor = pre_kernel
+            kernel[(l, q)][iat] = pre_kernel * factor
     return kernel
 
 
@@ -52,7 +60,7 @@ def compute_prediction(mol, kernel, weights, averages=None):
         for l in n_for_l[q].keys():
             di = (2*l+1) * n_for_l[q][l]
             wblock = weights.block(spherical_harmonics_l=l, element=q)
-            c[i:i+di] = np.einsum('rmM,rMn->nm', kernel[iat][l], wblock.values).flatten()
+            c[i:i+di] = np.einsum('rmM,rMn->nm', kernel[(l,q)][iat], wblock.values).flatten()
             if l==0 and averages:
                 c[i:i+di] += averages[q]
             i += di
