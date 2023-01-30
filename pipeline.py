@@ -24,11 +24,10 @@ def count_elements(mylist, dictionary=False):
     return counter
 
 def compute_kernel(atom_charges, soap, soap_ref):
-    # TODO return equistor tensor
-    lmax   = max(np.array([list(x) for x in soap.keys])[:,0])
-    kernel = []
-    for _ in atom_charges:
-        kernel.append( {l: [] for l in range(lmax+1)})
+    # TODO return an equistore tensor
+
+    lmax   = max(np.array([list(key) for key in soap.keys])[:,0])
+    kernel = [[None for l in range(lmax+1)] for _ in atom_charges]
 
     for iat, q in enumerate(atom_charges):
         # Compute the kernel
@@ -45,28 +44,29 @@ def compute_kernel(atom_charges, soap, soap_ref):
     return kernel
 
 
-def compute_prediction(mol, ref_q, kernel, weights, averages=None):
+def compute_prediction(mol, kernel, weights, averages=None):
 
     # c_{iat, l, m, n} = K_{iat/ref, l, m/m1} * w_{ref, l, n, m1}
+
+    n_for_l = {}
+    for q in set(mol.atom_charges()):
+        llist = qstack.equio._get_llist(q, mol)
+        if llist!=sorted(llist):
+            raise NotImplementedError('Cannot work with a basis with L not in order')
+        n_for_l[q] = count_elements(llist, dictionary=True)
 
     c = np.zeros(mol.nao)
     i = 0
     for iat in range(mol.natm):
         q = mol.atom_charge(iat)
-        refs = np.where(ref_q == q)[0]
-
-        llist = qstack.equio._get_llist(q, mol)
-        if llist!=sorted(llist):
-            raise NotImplementedError('Cannot work with a basis with L not in order')
-        n_for_l = count_elements(llist, dictionary=True)
-
-        for l in n_for_l.keys():
-            di = (2*l+1) * n_for_l[l]
+        for l in n_for_l[q].keys():
+            di = (2*l+1) * n_for_l[q][l]
             wblock = weights.block(spherical_harmonics_l=l, element=q)
             c[i:i+di] = np.einsum('rmM,rMn->nm', kernel[iat][l], wblock.values).flatten()
             if l==0 and averages:
                 c[i:i+di] += averages[q]
             i += di
+    c = qstack.tools.gpr2pyscf(mol, c)
     return c
 
 
@@ -78,7 +78,6 @@ def main():
     moldenfile = 'H6C2'
     normalize = False
     compare = False
-    dirty = False
     old = True
 
     refsoapfile = 'reference_soap_norm.npz' if normalize else 'reference_soap.npz'
@@ -129,11 +128,10 @@ def main():
     kernel = compute_kernel(mol.atom_charges(), soap, soap_ref)
 
     # Compute the prediction
-    c = compute_prediction(mol, ref_q, kernel, weights, averages, dirty=dirty)
+    c = compute_prediction(mol, kernel, weights, averages)
     print(c[:16])
 
     # Save the prediction
-    c = qstack.tools.gpr2pyscf(mol, c)
     np.savetxt('cccc', c)
     qstack.fields.density2file.coeffs_to_molden(mol, c, moldenfile+'.molden')
 
