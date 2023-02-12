@@ -22,9 +22,9 @@ def main():
     molfile = "./H6C2____monA_0932.xyz"
     #molfile = "./H6C2.xyz"
     moldenfile = 'H6C2'
-    normalize = False
+    normalize = True
     compare = False
-    old = True
+    old = False
 
     refsoapfile = 'reference_soap_norm.npz' if normalize else 'reference_soap.npz'
     if old:
