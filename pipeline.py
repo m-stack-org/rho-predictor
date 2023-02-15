@@ -5,8 +5,8 @@ import numpy as np
 from pyscf import data
 import equistore.io
 import qstack
-from lsoap import generate_lambda_soap_wrapper
-from rhoml import compute_kernel, compute_prediction
+from utils.lsoap import generate_lambda_soap_wrapper
+from utils.rhoml import compute_kernel, compute_prediction
 
 
 

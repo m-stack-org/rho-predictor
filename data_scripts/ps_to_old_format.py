@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
 import sys
+sys.path.insert(1, '../')
 import numpy as np
 import equistore.io
-from lsoap import ps_normalize_inplace
+from utils.lsoap import ps_normalize_inplace
 
 
 if __name__=='__main__':

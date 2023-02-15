@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import sys
+sys.path.insert(1, '../')
 import equistore.io
-from lsoap import generate_lambda_soap_wrapper
+from utils.lsoap import generate_lambda_soap_wrapper
 
 molfile = sys.argv[1]
 rascal_hypers = {

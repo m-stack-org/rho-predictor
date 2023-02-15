@@ -9,12 +9,14 @@ Output:
     - one big npz containing λ-soap
 '''
 
+import sys
+sys.path.insert(1, '../')
 import gc
 import glob
 import numpy as np
 import ase.io
 import equistore.io
-from lsoap import ps_normalize_inplace
+from utils.lsoap import ps_normalize_inplace
 
 def get_ref_idx(mollist, refs):
     mols = []
