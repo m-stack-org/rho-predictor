@@ -16,11 +16,11 @@ def main():
     normalize = True
     old = False
 
-    refsoapfile = 'reference_soap_norm.npz' if normalize else 'reference_soap.npz'
+    refsoapfile = 'data/reference_soap_norm.npz' if normalize else 'data/reference_soap.npz'
     if old:
-        refsoapfile = 'reference_old.npz'
-    refqfile    = 'reference_q.npy'
-    weightsfile = 'weights.npz'
+        refsoapfile = 'data/reference_old.npz'
+    refqfile    = 'data/reference_q.npy'
+    weightsfile = 'data/weights.npz'
     basis = 'ccpvqz jkfit'
 
     # Load the molecule
@@ -48,7 +48,7 @@ def main():
 
     # Load the averages
     # TODO convert these into a TensorMap
-    averages = {q: np.load('AVERAGES/'+data.elements.ELEMENTS[q]+'.npy') for q in elements}
+    averages = {q: np.load('data/AVERAGES/'+data.elements.ELEMENTS[q]+'.npy') for q in elements}
 
     # Load λ-SOAP for the reference environments
     soap_ref = equistore.io.load(refsoapfile)
