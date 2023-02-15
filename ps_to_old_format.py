@@ -3,7 +3,7 @@
 import sys
 import numpy as np
 import equistore.io
-from get_reference_ps import ps_normalize_inplace
+from lsoap import ps_normalize_inplace
 
 
 if __name__=='__main__':

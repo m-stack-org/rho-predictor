@@ -14,9 +14,7 @@ import glob
 import numpy as np
 import ase.io
 import equistore.io
-
-def ps_normalize_inplace(vals):
-    vals /= np.sqrt(np.linalg.norm(vals @ vals.T))
+from lsoap import ps_normalize_inplace
 
 def get_ref_idx(mollist, refs):
     mols = []

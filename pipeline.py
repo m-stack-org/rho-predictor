@@ -1,29 +1,19 @@
 #!/usr/bin/env python3
 
+import sys
 import numpy as np
 from pyscf import data
 import equistore.io
 import qstack
 from lsoap import generate_lambda_soap_wrapper
-from get_reference_ps import ps_normalize_inplace
 from rhoml import compute_kernel, compute_prediction
 
-
-def normalize_tensormap(soap):
-    for key, block in soap:
-        for samp in block.samples:
-            isamp = block.samples.position(samp)
-            ps_normalize_inplace(block.values[isamp,:,:])
 
 
 def main():
 
-    #molfile = "1.xyz"
-    molfile = "./H6C2____monA_0932.xyz"
-    #molfile = "./H6C2.xyz"
-    moldenfile = 'H6C2'
+    molfile = sys.argv[1] # "./H6C2____monA_0932.xyz"
     normalize = True
-    compare = False
     old = False
 
     refsoapfile = 'reference_soap_norm.npz' if normalize else 'reference_soap.npz'
@@ -33,17 +23,11 @@ def main():
     weightsfile = 'weights.npz'
     basis = 'ccpvqz jkfit'
 
-    if compare:
-        mol0 = qstack.compound.xyz_to_mol(molfile, basis='ccpvdz')
-        dm   = qstack.fields.dm.get_converged_dm(mol0, xc="pbe")
-        auxmol, c0 = qstack.fields.decomposition.decompose(mol0, dm, 'cc-pvqz jkfit')
-        qstack.fields.density2file.coeffs_to_molden(auxmol, c0, moldenfile+'_ref.molden')
-        exit(0)
-
     # Load the molecule
     mol = qstack.compound.xyz_to_mol(molfile, basis=basis)
 
     # Compute λ-SOAP for the target molecule
+    # TODO load the parameters from a file
     rascal_hypers = {
         "cutoff": 4.0,
         "max_radial": 8,
@@ -54,9 +38,7 @@ def main():
         "center_atom_weight": 1.0,
     }
     elements = [1, 6, 7, 8]
-    soap = generate_lambda_soap_wrapper(molfile, rascal_hypers, elements)
-    if normalize:
-        normalize_tensormap(soap)
+    soap = generate_lambda_soap_wrapper(molfile, rascal_hypers, elements, normalize)
     if old:
         soap = equistore.io.load('ethane.npz')
 
@@ -65,6 +47,7 @@ def main():
     ref_q = np.load(refqfile)
 
     # Load the averages
+    # TODO convert these into a TensorMap
     averages = {q: np.load('AVERAGES/'+data.elements.ELEMENTS[q]+'.npy') for q in elements}
 
     # Load λ-SOAP for the reference environments
@@ -79,8 +62,8 @@ def main():
     print(c[:16])
 
     # Save the prediction
-    np.savetxt('cccc', c)
-    qstack.fields.density2file.coeffs_to_molden(mol, c, moldenfile+'.molden')
+    np.savetxt(molfile+'.coeff.dat', c)
+    qstack.fields.density2file.coeffs_to_molden(mol, c, molfile+'.molden')
 
 
 if __name__=='__main__':
