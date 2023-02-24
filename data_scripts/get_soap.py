@@ -15,5 +15,5 @@ rascal_hypers = {
     "cutoff_function": {"ShiftedCosine": {"width": 0.5}},
     "center_atom_weight": 1.0,
 }
-soap = generate_lambda_soap_wrapper([molfile], rascal_hypers, neighbor_species=[1,6,7,8])
+soap = generate_lambda_soap_wrapper([molfile], rascal_hypers, neighbor_species=[1,6,7,8], normalize=True)
 equistore.io.save(sys.argv[2], soap)

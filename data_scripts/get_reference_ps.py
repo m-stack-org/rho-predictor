@@ -85,7 +85,7 @@ def merge_ref_ps(idx, normalize=False):
 if __name__=='__main__':
     lmax = 6
 
-    mydir = "bfdb/"
+    mydir = "../bfdb/"
     mollist = [mydir+f for f in np.loadtxt(mydir+"mollist.txt", dtype=str)]
     refs = np.loadtxt(mydir+'refs_selection_1000.txt', dtype=int)
 

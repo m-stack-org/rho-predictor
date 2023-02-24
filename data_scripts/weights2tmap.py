@@ -6,8 +6,8 @@ import equistore.io
 from qstack import equio
 import qstack
 
-weights = np.load('bfdb/weights_M1000_trainfrac1.0_reg1e-06_jit1e-08.npy')
-qs = np.load('reference_q.npy')
+weights = np.load('../bfdb/weights_M1000_trainfrac1.0_reg1e-06_jit1e-08.npy')
+qs = np.load('../data/reference_q.npy')
 
 mol = gto.Mole()
 mol.atom = [(q, np.random.random(3)) for q in qs]
