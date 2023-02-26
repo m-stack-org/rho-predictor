@@ -12,7 +12,7 @@ if __name__=='__main__':
     qs = [1, 6, 7, 8]
     normalize = True
 
-    tensor = equistore.io.load(f'bfdb/{sys.argv[1]}')
+    tensor = equistore.io.load(f'../bfdb/{sys.argv[1]}')
     i = int(sys.argv[2])
 
     for l in range(lmax+1):

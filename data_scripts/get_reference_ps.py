@@ -36,7 +36,7 @@ def get_ref_idx(mollist, refs):
 
 def merge_ref_ps(idx, normalize=False):
 
-    elements = set([q for mol in mols for q in mol.numbers])
+    elements = sorted(set([q for mol in mols for q in mol.numbers]))
     keys = [(l, q) for q in elements for l in range(lmax+1)]
 
     tm_labels = None
@@ -47,6 +47,7 @@ def merge_ref_ps(idx, normalize=False):
 
     ref_q = np.zeros(len(refs), dtype=int)
 
+    tensor_keys_names = None
     for iref, ref in enumerate(idx):
         print(iref)
         mol_id, atom_id  = ref
@@ -66,11 +67,14 @@ def merge_ref_ps(idx, normalize=False):
             if key not in block_comp_labels:
                 block_comp_labels[key] = block.components
                 block_prop_labels[key] = block.properties
-            if tm_labels is None:
-                tm_labels = equistore.Labels(tensor.keys.names, np.array(keys))
+        if not tensor_keys_names:
+            tensor_keys_names = tensor.keys.names
 
         del tensor
         gc.collect()
+
+    keys.remove((lmax,1))
+    tm_labels = equistore.Labels(tensor_keys_names, np.array(keys))
 
     for key in keys:
         block_samp_label = equistore.Labels(['ref_env'], np.array(block_samp_label_vals[key]).reshape(-1,1))
@@ -83,15 +87,15 @@ def merge_ref_ps(idx, normalize=False):
     return tensor, ref_q
 
 if __name__=='__main__':
-    lmax = 6
+    lmax = 5
 
     mydir = "../bfdb/"
     mollist = [mydir+f for f in np.loadtxt(mydir+"mollist.txt", dtype=str)]
-    refs = np.loadtxt(mydir+'refs_selection_1000.txt', dtype=int)
+    refs = np.loadtxt(mydir+'refs_selection_500.txt', dtype=int)
 
     mols, idx = get_ref_idx(mollist, refs)
     tensor, ref_q = merge_ref_ps(idx, normalize=True)
     print(tensor)
 
-    equistore.io.save('reference.npz', tensor)
-    np.save('reference_q.npy', ref_q)
+    equistore.io.save('reference_500.npz', tensor)
+    np.save('reference_500_q.npy', ref_q)
