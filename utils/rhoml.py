@@ -4,7 +4,7 @@ import qstack.equio as equio
 
 
 def kernels_toTMap(atom_charges, kernel):
-    tm_label_vals = list(kernel.keys())
+    tm_label_vals = sorted(list(kernel.keys()), key=lambda x: x[::-1])
     tensor_blocks = []
     for (l, q) in tm_label_vals:
         values = np.array(kernel[(l, q)]).transpose(0,2,3,1)
@@ -22,10 +22,14 @@ def kernels_toTMap(atom_charges, kernel):
 
 def compute_kernel(atom_charges, soap, soap_ref):
     lmax = max(np.array([list(key) for key in soap.keys])[:,0])
-    elements = sorted(set(atom_charges))
-    kernel = {key: [] for key in [(l, q) for q in elements for l in range(lmax+1)] }
+    keys1 = set([tuple(key) for key in soap.keys])
+    keys2 = set([tuple(key) for key in soap_ref.keys])
+    keys  = sorted(keys1 & keys2, key=lambda x: x[::-1])
+    kernel = {key: [] for key in keys}
+
     for iat, q in enumerate(atom_charges):
-        for l in range(lmax+1):
+        for (l,q_) in keys:
+            if q_!=q: continue
             block = soap.block(spherical_harmonics_l=l, species_center=q)
             isamp = block.samples.position((0, iat))
             vals  = block.values[isamp,:,:]
@@ -53,5 +57,5 @@ def compute_prediction(mol, kernel, weights, averages=None):
                 kpos = kblock.samples.position(sample)
                 cblock.values[cpos,:,:] = np.einsum('mMr,rMn->mn', kblock.values[kpos], wblock.values)
             if averages and l==0:
-                cblock.values[:,:,:] = cblock.values + averages[q]
+                cblock.values[:,:,:] = cblock.values + averages.block(element=q).values
     return coeffs
