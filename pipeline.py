@@ -9,46 +9,32 @@ from utils.lsoap import generate_lambda_soap_wrapper
 from utils.rhoml import compute_kernel, compute_prediction
 
 
-
 def main():
 
-    molfile = sys.argv[1] # "./H6C2____monA_0932.xyz"
+    molfile = sys.argv[1]   # "./H6C2____monA_0932.xyz"
+    modelname = sys.argv[2] # "bfdb_HCNO"
+    # TODO
+    # @Osvaldo:
+    # could you please make a drop down list with the models
+    # from the models/ dir? for now there's only one
 
-    # TODO load the parameters from a file
-
-    refsoapfile = 'data/reference_500.npz'
-    weightsfile = 'data/weights.npz'
-    averagefile = 'data/averages.npz'
-    basis = 'ccpvqz jkfit'
-
-    rascal_hypers = {
-        "cutoff": 4.0,
-        "max_radial": 8,
-        "max_angular": 6,
-        "atomic_gaussian_width": 0.3,
-        "radial_basis": {"Gto": {}},
-        "cutoff_function": {"ShiftedCosine": {"width": 0.5}},
-        "center_atom_weight": 1.0,
-    }
-
-    elements = [1, 6, 7, 8]
-
-    # ...
+    # Get the model
+    model = getattr(__import__("models", fromlist=[modelname]), modelname)
 
     # Load the molecule
-    mol = qstack.compound.xyz_to_mol(molfile, basis=basis)
+    mol = qstack.compound.xyz_to_mol(molfile, basis=model.basis)
 
     # Compute λ-SOAP for the target molecule
-    soap = generate_lambda_soap_wrapper(molfile, rascal_hypers, elements, normalize=True)
+    soap = generate_lambda_soap_wrapper(molfile, model.rascal_hypers, model.elements, normalize=True)
 
     # Load regression weights
-    weights = equistore.io.load(weightsfile)
+    weights = equistore.io.load(model.weightsfile)
 
     # Load the averages
-    averages = equistore.io.load(averagefile)
+    averages = equistore.io.load(model.averagefile)
 
     # Load λ-SOAP for the reference environments
-    soap_ref = equistore.io.load(refsoapfile)
+    soap_ref = equistore.io.load(model.refsoapfile)
 
     # Compute the kernel
     kernel = compute_kernel(mol.atom_charges(), soap, soap_ref)
@@ -56,7 +42,6 @@ def main():
     # Compute the prediction
     c_tm = compute_prediction(mol, kernel, weights, averages)
     c = qstack.equio.tensormap_to_vector(mol, c_tm)
-    print(c[:16])
 
     # Save the prediction
     equistore.io.save(molfile+'.coeff.npz', c_tm)
