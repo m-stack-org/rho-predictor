@@ -13,10 +13,6 @@ def main():
 
     molfile = sys.argv[1]   # "./H6C2____monA_0932.xyz"
     modelname = sys.argv[2] # "bfdb_HCNO"
-    # TODO
-    # @Osvaldo:
-    # could you please make a drop down list with the models
-    # from the models/ dir? for now there's only one
 
     # Get the model
     model = getattr(__import__("models", fromlist=[modelname]), modelname)

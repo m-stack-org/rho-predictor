@@ -6,8 +6,8 @@ import equistore
 import equistore.io
 from qstack import equio
 
-elements = [1, 6, 7, 8]
-averages = {q: np.load('../bfdb/AVERAGES/'+data.elements.ELEMENTS[q]+'.npy') for q in elements}
+elements = [1, 6, 7, 8, 16]
+averages = {q: np.load('../bfdb_with_s/AVERAGES/'+data.elements.ELEMENTS[q]+'.npy') for q in elements}
 
 tm_label_vals = []
 tensor_blocks = []

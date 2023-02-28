@@ -9,10 +9,10 @@ from utils.lsoap import ps_normalize_inplace
 
 if __name__=='__main__':
     lmax = 5
-    qs = [1, 6, 7, 8]
+    qs = [1, 6, 7, 8, 16]
     normalize = True
 
-    tensor = equistore.io.load(f'../bfdb/{sys.argv[1]}')
+    tensor = equistore.io.load(sys.argv[1])
     i = int(sys.argv[2])
 
     for l in range(lmax+1):

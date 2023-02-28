@@ -34,10 +34,12 @@ def convert_to_tmap(pslist, ref_q):
             block_comp_label_vals[key] = np.arange(-l, l+1).reshape(-1,1)
             block_prop_label_vals[key] = np.arange(ps_q.shape[-1]).reshape(-1,1)
 
+    keys.remove((lmax,1))
+
     tm_labels = equistore.Labels(('spherical_harmonics_l', 'species_center'), np.array(keys))
-    block_comp_labels = {key: equistore.Labels(('spherical_harmonics_m',), block_comp_label_vals[key]) for key in blocks}
-    block_prop_labels = {key: equistore.Labels(('prop_number',),           block_prop_label_vals[key]) for key in blocks}
-    block_samp_labels = {key: equistore.Labels(('ref_env',),               block_samp_label_vals[key]) for key in blocks}
+    block_comp_labels = {key: equistore.Labels(('spherical_harmonics_m',), block_comp_label_vals[key]) for key in keys}
+    block_prop_labels = {key: equistore.Labels(('prop_number',),           block_prop_label_vals[key]) for key in keys}
+    block_samp_labels = {key: equistore.Labels(('ref_env',),               block_samp_label_vals[key]) for key in keys}
     blocks = {key: equistore.TensorBlock(values=blocks[key], samples=block_samp_labels[key], components=[block_comp_labels[key]], properties=block_prop_labels[key]) for key in keys}
     tensor = equistore.TensorMap(keys=tm_labels, blocks=[blocks[key] for key in keys])
     return tensor
