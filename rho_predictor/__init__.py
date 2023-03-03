@@ -2,4 +2,4 @@
 
 from rho_predictor import rhoml
 from rho_predictor import lsoap
-from rho_predictor import predictor
+from rho_predictor.predictor import predict_sagpr
