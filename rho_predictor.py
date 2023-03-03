@@ -6,42 +6,38 @@ import numpy as np
 from pyscf import data
 import equistore.io
 import qstack
-from utils.lsoap import generate_lambda_soap_wrapper
-from utils.rhoml import compute_kernel, compute_prediction
+from utils.lsoap import generate_lambda_soap_wrapper #TODO
+from utils.rhoml import compute_kernel, compute_prediction #TODO
 
 def mylog(s, printlvl=0):
     if printlvl > 0:
         print(datetime.now(), s)
 
-def main():
-
-    molfile = sys.argv[1]   # "./H6C2____monA_0932.xyz"
-    modelname = sys.argv[2] # "bfdb_HCNO"
-    printlvl = 1
+def rho_predictor_sagpr(molfile, modelname, working_dir="./", model_dir='./', printlvl=0):
 
     # Get the model
     mylog('# Get the model', printlvl)
-    model = getattr(__import__("models", fromlist=[modelname]), modelname)
+    model = getattr(__import__("models", fromlist=[modelname]), modelname) # TODO
 
     # Load the molecule
     mylog('# Load the molecule', printlvl)
-    mol = qstack.compound.xyz_to_mol(molfile, basis=model.basis)
+    mol = qstack.compound.xyz_to_mol(working_dir+molfile, basis=model.basis)
 
     # Compute λ-SOAP for the target molecule
     mylog('# Compute λ-SOAP for the target molecule', printlvl)
-    soap = generate_lambda_soap_wrapper(molfile, model.rascal_hypers, model.elements, normalize=True)
+    soap = generate_lambda_soap_wrapper(working_dir+molfile, model.rascal_hypers, model.elements, normalize=True)
 
     # Load regression weights
     mylog('# Load regression weights', printlvl)
-    weights = equistore.io.load(model.weightsfile)
+    weights = equistore.io.load(model_dir+model.weightsfile)
 
     # Load the averages
     mylog('# Load the averages', printlvl)
-    averages = equistore.io.load(model.averagefile)
+    averages = equistore.io.load(model_dir+model.averagefile)
 
     # Load λ-SOAP for the reference environments
     mylog('# Load λ-SOAP for the reference environments', printlvl)
-    soap_ref = equistore.io.load(model.refsoapfile)
+    soap_ref = equistore.io.load(model_dir+model.refsoapfile)
 
     # Compute the kernel
     mylog('# Compute the kernel', printlvl)
@@ -54,10 +50,11 @@ def main():
 
     # Save the prediction
     mylog('# Save the prediction', printlvl)
-    equistore.io.save(molfile+'.coeff.npz', c_tm)
-    np.savetxt(molfile+'.coeff.dat', c)
-    qstack.fields.density2file.coeffs_to_molden(mol, c, molfile+'.molden')
+    equistore.io.save(working_dir+molfile+'.coeff.npz', c_tm)
+    np.savetxt(working_dir+molfile+'.coeff.dat', c)
+    qstack.fields.density2file.coeffs_to_molden(mol, c, working_dir+molfile+'.molden')
+    return c
 
 
 if __name__=='__main__':
-    main()
+    rho_predictor_sagpr(sys.argv[1], sys.argv[2], printlvl=1)
