@@ -6,8 +6,8 @@ import numpy as np
 from pyscf import data
 import equistore.io
 import qstack
-from utils.lsoap import generate_lambda_soap_wrapper #TODO
-from utils.rhoml import compute_kernel, compute_prediction #TODO
+from rho_predictor.utils.lsoap import generate_lambda_soap_wrapper #TODO
+from rho_predictor.utils.rhoml import compute_kernel, compute_prediction #TODO
 
 def mylog(s, printlvl=0):
     if printlvl > 0:
