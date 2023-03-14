@@ -642,11 +642,10 @@ def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=Non
 
     # nu=1 features
     acdc_nu1 = acdc_standardize_keys(acdc_nu1)
-    # TODO !!!
     if neighbor_species is None:
-        acdc_nu1.keys_to_properties("species_neighbor")
+        acdc_nu1 = acdc_nu1.keys_to_properties("species_neighbor")
     else:
-        acdc_nu1.keys_to_properties(
+        acdc_nu1 = acdc_nu1.keys_to_properties(
             keys_to_move=Labels(
             names=("species_neighbor",),
             values=np.array(neighbor_species).reshape(-1, 1),
