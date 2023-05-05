@@ -688,21 +688,27 @@ def clean_lambda_soap(lsoap: TensorMap):
 
 ################
 
-def ps_normalize_inplace(vals):
-    vals /= np.sqrt(np.linalg.norm(vals @ vals.T))
+MIN_NORM = 1e-10
 
-def normalize_tensormap(soap):
+def ps_normalize_inplace(vals, min_norm=MIN_NORM):
+    norm = np.sqrt(np.linalg.norm(vals @ vals.T))
+    if norm > min_norm:
+        vals /= norm
+    else:
+        vals[...] = 0
+
+def normalize_tensormap(soap, min_norm=MIN_NORM):
     for key, block in soap:
         for samp in block.samples:
             isamp = block.samples.position(samp)
-            ps_normalize_inplace(block.values[isamp,:,:])
+            ps_normalize_inplace(block.values[isamp,:,:], min_norm=min_norm)
 
-def generate_lambda_soap_wrapper(molfiles: list, rascal_hypers: dict, neighbor_species=None, normalize=False):
+def generate_lambda_soap_wrapper(molfiles: list, rascal_hypers: dict, neighbor_species=None, normalize=False, min_norm=MIN_NORM):
     if not isinstance(molfiles, list):
         molfiles = [molfiles]
     mols = [ase.io.read(i) for i in molfiles]
     soap = generate_lambda_soap(frames=mols, rascal_hypers=rascal_hypers, neighbor_species=neighbor_species)
     soap = clean_lambda_soap(soap)
     if normalize:
-        normalize_tensormap(soap)
+        normalize_tensormap(soap, min_norm=min_norm)
     return soap
