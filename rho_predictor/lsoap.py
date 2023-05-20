@@ -700,21 +700,20 @@ def ps_normalize_inplace(vals, min_norm=MIN_NORM):
         vals[...] = 0.0
     return norm
 
+
 def ps_normalize_gradient_inplace(idx, data, values, norm, min_norm=MIN_NORM):
     # print(data[idx,:,:].shape)  # natoms-in-mol * 3 * (2*l+1) * nfeatures
     # print(values.shape)         # (2*l+1) * nfeatures
     if norm > min_norm:
-        # need to divide/multiply one of them by 2 TODO
         if values.shape[0]==1:
             t1 = np.einsum('kxmi,mi->kx', data[idx], values)
             dnorm = np.einsum('kx,mi->kxmi', t1, values)
         else:
             p = values @ values.T
             p1 = np.einsum('Mf,kxmf->Mmkx', values, data[idx])
-            #p2 = np.einsum('Mf,kxmf->mMkx', values, data[idx])
             p2 = p1.transpose(1,0,2,3)
             t1 = np.einsum('Mm,Mmkx->kx', p, p1+p2)
-            dnorm = np.einsum('kx,mi->kxmi', t1, values)
+            dnorm = 0.5*np.einsum('kx,mi->kxmi', t1, values)
         data[idx,...] -= dnorm
         data[idx,...] /= norm
     else:
