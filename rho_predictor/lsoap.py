@@ -1,9 +1,7 @@
 # code from Joe
 
-import os
 import pickle
 import re
-import ase.io
 import numpy as np
 import wigners
 
@@ -737,10 +735,9 @@ def normalize_tensormap(soap, min_norm=MIN_NORM):
                 ps_normalize_gradient_inplace(igsamps, gradient.data, block.values[isamp,:,:], norm, min_norm=min_norm)
 
 
-def generate_lambda_soap_wrapper(molfiles: list, rascal_hypers: dict, neighbor_species=None, normalize=False, min_norm=MIN_NORM, gradients=None):
-    if not isinstance(molfiles, list):
-        molfiles = [molfiles]
-    mols = [ase.io.read(i) for i in molfiles]
+def generate_lambda_soap_wrapper(mols: list, rascal_hypers: dict, neighbor_species=None, normalize=False, min_norm=MIN_NORM, gradients=None):
+    if not isinstance(mols, list):
+        mols = [mols]
     soap = generate_lambda_soap(frames=mols, rascal_hypers=rascal_hypers, neighbor_species=neighbor_species, gradients=gradients)
     soap = clean_lambda_soap(soap)
     if normalize:
