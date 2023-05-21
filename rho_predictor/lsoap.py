@@ -1,9 +1,7 @@
 # code from Joe
 
-import os
 import pickle
 import re
-import ase.io
 import numpy as np
 import wigners
 
@@ -313,6 +311,11 @@ def acdc_standardize_keys(descriptor):
                 ),
             )
         )
+        for parameter, gradient in block.gradients():
+            blocks[-1].add_gradient(parameter=parameter,
+                                    data=gradient.data,
+                                    samples=gradient.samples,
+                                    components=gradient.components)
 
     if not "inversion_sigma" in key_names:
         key_names = ("inversion_sigma",) + key_names
@@ -584,7 +587,6 @@ def cg_increment(
     """Specialized version of the CG product to perform iterations with nu=1 features"""
 
     nu = x_nu.keys["order_nu"][0]
-
     feature_roots = _remove_suffix(x_1.block(0).properties.names)
 
     if nu == 1:
@@ -626,7 +628,7 @@ def _remove_suffix(names, new_suffix=""):
 
 # ===== Start of lambda-SOAP generation code
 
-def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=None):
+def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=None, gradients=None):
     """
     Takes a list of frames of ASE loaded structures and a dict of Rascaline
     hyperparameters and generates a lambda-SOAP (i.e. nu=2) representation of
@@ -638,7 +640,7 @@ def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=Non
     cg = ClebschGordanReal(l_max=rascal_hypers["max_angular"])
 
     # Generate descriptor via Spherical Expansion
-    acdc_nu1 = calculator.compute(frames)
+    acdc_nu1 = calculator.compute(frames, gradients=gradients)
 
     # nu=1 features
     acdc_nu1 = acdc_standardize_keys(acdc_nu1)
@@ -695,19 +697,47 @@ def ps_normalize_inplace(vals, min_norm=MIN_NORM):
     if norm > min_norm:
         vals /= norm
     else:
-        vals[...] = 0
+        vals[...] = 0.0
+    return norm
+
+
+def ps_normalize_gradient_inplace(idx, data, values, norm, min_norm=MIN_NORM):
+    # print(data[idx,:,:].shape)  # natoms-in-mol * 3 * (2*l+1) * nfeatures
+    # print(values.shape)         # (2*l+1) * nfeatures
+    if norm > min_norm:
+        if values.shape[0]==1:
+            t1 = np.einsum('kxmi,mi->kx', data[idx], values)
+            dnorm = np.einsum('kx,mi->kxmi', t1, values)
+        else:
+            p = values @ values.T
+            p1 = np.einsum('Mf,kxmf->Mmkx', values, data[idx])
+            p2 = p1.transpose(1,0,2,3)
+            t1 = np.einsum('Mm,Mmkx->kx', p, p1+p2)
+            dnorm = 0.5*np.einsum('kx,mi->kxmi', t1, values)
+        data[idx,...] -= dnorm
+        data[idx,...] /= norm
+    else:
+        data[idx,...] = 0.0
+
 
 def normalize_tensormap(soap, min_norm=MIN_NORM):
     for key, block in soap:
+        norms = np.zeros(len(block.samples))
         for samp in block.samples:
             isamp = block.samples.position(samp)
-            ps_normalize_inplace(block.values[isamp,:,:], min_norm=min_norm)
+            norm = ps_normalize_inplace(block.values[isamp,:,:], min_norm=min_norm)
 
-def generate_lambda_soap_wrapper(molfiles: list, rascal_hypers: dict, neighbor_species=None, normalize=False, min_norm=MIN_NORM):
-    if not isinstance(molfiles, list):
-        molfiles = [molfiles]
-    mols = [ase.io.read(i) for i in molfiles]
-    soap = generate_lambda_soap(frames=mols, rascal_hypers=rascal_hypers, neighbor_species=neighbor_species)
+            if block.has_gradient('positions'):
+                gradient = block.gradient('positions')
+                # get indices for gradient of center id #isamp
+                igsamps = np.array([i for i, gsamp in enumerate(gradient.samples) if gsamp[0] == isamp])
+                ps_normalize_gradient_inplace(igsamps, gradient.data, block.values[isamp,:,:], norm, min_norm=min_norm)
+
+
+def generate_lambda_soap_wrapper(mols: list, rascal_hypers: dict, neighbor_species=None, normalize=False, min_norm=MIN_NORM, gradients=None):
+    if not isinstance(mols, list):
+        mols = [mols]
+    soap = generate_lambda_soap(frames=mols, rascal_hypers=rascal_hypers, neighbor_species=neighbor_species, gradients=gradients)
     soap = clean_lambda_soap(soap)
     if normalize:
         normalize_tensormap(soap, min_norm=min_norm)

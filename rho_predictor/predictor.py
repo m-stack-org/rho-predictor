@@ -3,6 +3,7 @@
 import sys
 from datetime import datetime
 import numpy as np
+import ase.io
 from pyscf import data
 import equistore.io
 import qstack
@@ -24,10 +25,11 @@ def predict_sagpr(molfile, modelname, charge=0, correct_n = True, working_dir=".
     # Load the molecule
     log('# Load the molecule', printlvl)
     mol = qstack.compound.xyz_to_mol(working_dir+molfile, basis=model.basis, charge=charge)
+    asemol = ase.io.read(working_dir+molfile)
 
     # Compute λ-SOAP for the target molecule
     log('# Compute λ-SOAP for the target molecule', printlvl)
-    soap = generate_lambda_soap_wrapper(working_dir+molfile, model.rascal_hypers, model.elements, normalize=True)
+    soap = generate_lambda_soap_wrapper(asemol, model.rascal_hypers, model.elements, normalize=True)
 
     # Load regression weights
     log('# Load regression weights', printlvl)
