@@ -6,7 +6,50 @@ import ase.io
 from rho_predictor.lsoap import generate_lambda_soap_wrapper
 
 
-def test_gradient():
+def get_num_gradient(asemol, func, dr=1e-4, verbose=True):
+    r = asemol.get_positions()
+    gradnum = [[None, None, None] for _ in r]
+    for atom in range(len(r)):
+        if verbose:
+            print(f'{atom+1}/{len(r)}')
+        for idir in range(3):
+            r0 = r[atom,idir]
+            r[atom,idir] = r0 + dr
+            asemol.set_positions(r)
+            s1 = func(asemol)
+            r[atom,idir] = r0 - dr
+            asemol.set_positions(r)
+            s2 = func(asemol)
+            r[atom,idir] = r0
+            asemol.set_positions(r)
+
+            for key, block in s1:
+                block.values[...] -= s2[key].values
+                block.values[...] *= 0.5/dr
+            gradnum[atom][idir] = s1
+    if verbose:
+        print()
+    return gradnum
+
+
+def check_gradients(soap, gradnum, max_diff=1e-6, verbose=True):
+    for key, block in soap:
+        if verbose:
+            print(f'{key=}')
+        gblock = soap[key].gradient('positions')
+        for gpos, (sample, structure, atom) in enumerate(gblock.samples):
+            for idir in range(3):
+                gnum  = gradnum[atom][idir][key].values[sample]
+                ganal = gblock.data[gpos,idir,:,:]
+                diff = np.linalg.norm(gnum-ganal)
+                if verbose:
+                    print(f'{sample=} {atom=} {idir=} {diff:e}')
+                assert diff < max_diff
+        if verbose:
+            print()
+
+
+def test_gradient_soap():
     path = os.path.dirname(os.path.realpath(__file__))
 
     xyzfile = path+'/data/H2O.xyz'
@@ -16,45 +59,12 @@ def test_gradient():
 
     model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname) # TODO
     asemol = ase.io.read(xyzfile)
+    testfunc = lambda x: generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=None, normalize=True)
 
-    # get numerical gradient
-    r = asemol.get_positions()
-    gradnum = [[None, None, None] for _ in r]
-    for atom in range(len(r)):
-        print(f'{atom+1}/{len(r)}')
-        for idir in range(3):
-            r0 = r[atom,idir]
-            r[atom,idir] = r0 + dr
-            asemol.set_positions(r)
-            s1 = generate_lambda_soap_wrapper(asemol, model.rascal_hypers, neighbor_species=None, normalize=True)
-            r[atom,idir] = r0 - dr
-            asemol.set_positions(r)
-            s2 = generate_lambda_soap_wrapper(asemol, model.rascal_hypers, neighbor_species=None, normalize=True)
-            r[atom,idir] = r0
-            asemol.set_positions(r)
-
-            for key, block in s1:
-                block.values[...] -= s2[key].values
-                block.values[...] *= 0.5/dr
-            gradnum[atom][idir] = s1
-    print()
-
-    # get analytical gradient
     soap = generate_lambda_soap_wrapper(asemol, model.rascal_hypers, neighbor_species=None, normalize=True, gradients=["positions"])
-
-    # compare
-    for key, block in soap:
-        print(f'{key=}')
-        gblock = soap[key].gradient('positions')
-        for gpos, (sample, structure, atom) in enumerate(gblock.samples):
-            for idir in range(3):
-                gnum  = gradnum[atom][idir][key].values[sample]
-                ganal = gblock.data[gpos,idir,:,:]
-                diff = np.linalg.norm(gnum-ganal)
-                print(f'{sample=} {atom=} {idir=} {diff:e}')
-                assert diff < max_diff
-        print()
+    gradnum = get_num_gradient(asemol, testfunc, dr=dr)
+    check_gradients(soap, gradnum, max_diff=max_diff)
 
 
 if __name__ == '__main__':
-    test_gradient()
+    test_gradient_soap()
