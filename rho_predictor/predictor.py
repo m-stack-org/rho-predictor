@@ -45,7 +45,7 @@ def predict_sagpr(molfile, modelname, charge=0, correct_n = True, working_dir=".
 
     # Compute the kernel
     log('# Compute the kernel', printlvl)
-    kernel = compute_kernel(mol.atom_charges(), soap, soap_ref)
+    kernel = compute_kernel(soap, soap_ref)
 
     # Compute the prediction
     log('# Compute the prediction', printlvl)

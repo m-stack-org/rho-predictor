@@ -3,44 +3,40 @@ import equistore
 import qstack.equio as equio
 
 
-def kernels_toTMap(atom_charges, kernel):
-    tm_label_vals = sorted(list(kernel.keys()), key=lambda x: x[::-1])
-    tensor_blocks = []
-    for (l, q) in tm_label_vals:
-        values = np.array(kernel[(l, q)]).transpose(0,2,3,1)
-        prop_label_vals = np.arange(values.shape[-1]).reshape(-1,1)
-        samp_label_vals = np.where(atom_charges==q)[0].reshape(-1,1)
-        comp_label_vals = np.arange(-l, l+1).reshape(-1,1)
-        properties = equistore.Labels(equio.vector_label_names.block_prop, prop_label_vals)
-        samples    = equistore.Labels(equio.vector_label_names.block_samp, samp_label_vals)
-        components = [equistore.Labels([name], comp_label_vals) for name in equio.matrix_label_names.block_comp]
-        tensor_blocks.append(equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties))
-    tm_labels = equistore.Labels(equio.vector_label_names.tm, np.array(tm_label_vals))
-    tensor = equistore.TensorMap(keys=tm_labels, blocks=tensor_blocks)
-    return tensor
-
-
-def compute_kernel(atom_charges, soap, soap_ref):
-    lmax = max(np.array([list(key) for key in soap.keys])[:,0])
+def compute_kernel(soap, soap_ref):
     keys1 = set([tuple(key) for key in soap.keys])
     keys2 = set([tuple(key) for key in soap_ref.keys])
     keys  = sorted(keys1 & keys2, key=lambda x: x[::-1])
-    kernel = {key: [] for key in keys}
 
-    for iat, q in enumerate(atom_charges):
-        for (l,q_) in keys:
-            if q_!=q: continue
-            block = soap.block(spherical_harmonics_l=l, species_center=q)
-            isamp = block.samples.position((0, iat))
-            vals  = block.values[isamp,:,:]
-            block_ref = soap_ref.block(spherical_harmonics_l=l, species_center=q)
-            vals_ref  = block_ref.values
-            pre_kernel = np.einsum('rmx,Mx->rMm', vals_ref, vals)
-            # Normalize with zeta=2
-            if l==0:
-                factor = pre_kernel
-            kernel[(l,q)].append(pre_kernel * factor)
-    kernel = kernels_toTMap(atom_charges, kernel)
+    # Create an empty kernel tmap
+    kernel_blocks = []
+    tm_labels = equistore.Labels(soap.keys.names, np.array(keys))
+    for key in tm_labels:
+        sblock = soap.block(key)
+        rblock = soap_ref.block(key)
+        samples = equistore.Labels(soap.sample_names[1:2], sblock.samples.asarray()[:,[1]])
+        properties = rblock.samples
+        components = [equistore.Labels([soap.components_names[0][0]+str(i)], sblock.components[0].asarray()) for i in [1,2]]
+        values = np.zeros((len(samples), len(components[0]), len(components[1]), len(properties)))
+        kernel_blocks.append(equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties))
+    kernel = equistore.TensorMap(keys=tm_labels, blocks=kernel_blocks)
+
+    # Compute kernel
+    for key in tm_labels:
+        sblock = soap.block(key)
+        rblock = soap_ref.block(key)
+        kblock = kernel.block(key)
+        kblock.values[:,:,:,:] = np.einsum('rmx,aMx->aMmr', rblock.values, sblock.values)
+
+    # Normalize with zeta=2, mind the loop direction
+    elements = np.unique(tm_labels.asarray()[:,1])
+    lmax = {q: max(map(lambda x: x[0], filter(lambda x: x[1]==q, keys))) for q in elements}
+    for q in elements:
+        k0block = kernel.block(spherical_harmonics_l=0, species_center=q)
+        for l in range(lmax[q], -1, -1):
+            kblock  = kernel.block(spherical_harmonics_l=l, species_center=q)
+            kblock.values[...] *= k0block.values[...]
+
     return kernel
 
 
@@ -51,7 +47,7 @@ def compute_prediction(mol, kernel, weights, averages=None):
         for l in sorted(set(equio._get_llist(q, mol))):
             wblock = weights.block(spherical_harmonics_l=l, element=q)
             cblock = coeffs.block(spherical_harmonics_l=l, element=q)
-            kblock = kernel.block(spherical_harmonics_l=l, element=q)
+            kblock = kernel.block(spherical_harmonics_l=l, species_center=q)
             for sample in cblock.samples:
                 cpos = cblock.samples.position(sample)
                 kpos = kblock.samples.position(sample)
