@@ -75,7 +75,7 @@ def test_gradient_kernel():
     modelname = 'bfdb_HCNO'
     dr = 1e-4
     max_diff = 1e-6
-    refsoapfile = 'data/reference_500.npz' # TODO
+    refsoapfile = 'data/reference_500.npz' # TODO take something small
 
     model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname)
     asemol = ase.io.read(xyzfile)
@@ -88,21 +88,13 @@ def test_gradient_kernel():
 
     soap = generate_lambda_soap_wrapper(asemol, model.rascal_hypers, model.elements, normalize=True, gradients=["positions"])
     kernel = compute_kernel(soap, soap_ref)
-    print(kernel)
-    print(kernel[0])
-    equistore.io.save('k.npz', kernel)
-    exit(0)
     gradnum = get_num_gradient(asemol, testfunc, dr=dr)
     check_gradients(kernel, gradnum, max_diff=max_diff)
 
 
 if __name__ == '__main__':
-    #test_gradient_soap()
+    test_gradient_soap()
     test_gradient_kernel()
-
-
-
-
 
     #weightsfile = 'data/weights.npz'       # TODO
     #weights = equistore.io.load(weightsfile)
