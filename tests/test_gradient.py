@@ -6,6 +6,7 @@ import ase.io
 import equistore.core as equistore
 from rho_predictor.lsoap import generate_lambda_soap_wrapper
 from rho_predictor.rhoml import compute_kernel, compute_prediction
+from rho_predictor.rhotools import load_model
 
 
 def get_num_gradient(asemol, func, dr=1e-4, verbose=True):
@@ -55,11 +56,11 @@ def test_gradient_soap():
     path = os.path.dirname(os.path.realpath(__file__))
 
     xyzfile = path+'/data/H2O.xyz'
-    modelname = 'bfdb'
+    modelname = 'bfdb_HCNO'
     dr = 1e-4
     max_diff = 1e-6
 
-    model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname)
+    model = load_model(modelname)
     asemol = ase.io.read(xyzfile)
     testfunc = lambda x: generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=None, normalize=True)
 
@@ -77,7 +78,7 @@ def test_gradient_kernel():
     max_diff = 1e-6
     refsoapfile = 'data/reference_500.npz' # TODO take something small
 
-    model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname)
+    model = load_model(modelname)
     asemol = ase.io.read(xyzfile)
     soap_ref = equistore.load(refsoapfile)
     def testfunc(x):
@@ -101,7 +102,7 @@ def test_gradient_prediction():
     dr = 1e-4
     max_diff = 1e-6
 
-    model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname)
+    model = load_model(modelname)
     asemol = ase.io.read(xyzfile)
     soap_ref = equistore.load(refsoapfile)
     weights = equistore.load(weightsfile)
