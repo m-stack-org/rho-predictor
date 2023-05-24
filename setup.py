@@ -8,5 +8,5 @@ setup(
     install_requires=[],
     packages=find_packages(),
     include_package_data=True,
-    package_data={'': ['rho_predictor/models/*.json']},
+    package_data={'': ['models/*.json']},
 )
