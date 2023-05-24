@@ -79,7 +79,6 @@ def test_gradient_kernel():
 
     model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname)
     asemol = ase.io.read(xyzfile)
-
     soap_ref = equistore.io.load(refsoapfile)
     def testfunc(x):
         soap = generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=model.elements, normalize=True)
@@ -92,9 +91,34 @@ def test_gradient_kernel():
     check_gradients(kernel, gradnum, max_diff=max_diff)
 
 
+def test_gradient_prediction():
+    path = os.path.dirname(os.path.realpath(__file__))
+
+    xyzfile = path+'/data/H2O.xyz'
+    modelname = 'bfdb_HCNO'
+    dr = 1e-4
+    max_diff = 1e-6
+    refsoapfile = 'data/reference_500.npz' # TODO take something small
+    weightsfile = 'data/weights.npz'       # TODO
+
+    model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname)
+    asemol = ase.io.read(xyzfile)
+    soap_ref = equistore.io.load(refsoapfile)
+    weights = equistore.io.load(weightsfile)
+    def testfunc(x):
+        soap = generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=model.elements, normalize=True)
+        kernel = compute_kernel(soap, soap_ref)
+        c = compute_prediction(kernel, weights)
+        return c
+
+    soap = generate_lambda_soap_wrapper(asemol, model.rascal_hypers, model.elements, normalize=True, gradients=["positions"])
+    kernel = compute_kernel(soap, soap_ref)
+    c = compute_prediction(kernel, weights)
+    gradnum = get_num_gradient(asemol, testfunc, dr=dr)
+    check_gradients(c, gradnum, max_diff=max_diff)
+
+
 if __name__ == '__main__':
     test_gradient_soap()
     test_gradient_kernel()
-
-    #weightsfile = 'data/weights.npz'       # TODO
-    #weights = equistore.io.load(weightsfile)
+    test_gradient_prediction()
