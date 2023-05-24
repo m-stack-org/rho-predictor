@@ -298,24 +298,20 @@ def acdc_standardize_keys(descriptor):
             key = (1,) + key
         keys.append(key)
         property_names = _remove_suffix(block.properties.names, "_1")
-        blocks.append(
-            equistore.TensorBlock(
-                values=block.values,
-                samples=block.samples,
-                components=block.components,
-                properties=equistore.Labels(
-                    property_names,
-                    np.asarray(block.properties.view(dtype=np.int32)).reshape(
-                        -1, len(property_names)
-                    ),
-                ),
-            )
-        )
-        for parameter, gradient in block.gradients():
-            blocks[-1].add_gradient(parameter=parameter,
-                                    data=gradient.data,
-                                    samples=gradient.samples,
-                                    components=gradient.components)
+        newblock = equistore.TensorBlock(
+                           values=block.values,
+                           samples=block.samples,
+                           components=block.components,
+                           properties=equistore.Labels(
+                               property_names,
+                               np.asarray(block.properties.view(dtype=np.int32)).reshape(-1, len(property_names)),
+                           ),
+                       )
+        for parameter, grad in block.gradients():
+            newgrad = equistore.TensorBlock(values=grad.values, samples=grad.samples,
+                                            components=grad.components, properties=newblock.properties)
+            newblock.add_gradient(parameter, newgrad)
+        blocks.append(newblock)
 
     if not "inversion_sigma" in key_names:
         key_names = ("inversion_sigma",) + key_names
@@ -513,8 +509,8 @@ def cg_combine(
                 if grad_components is not None:
                     grad_a = block_a.gradient("positions")
                     grad_b = block_b.gradient("positions")
-                    grad_a_data = np.swapaxes(grad_a.data, 1, 2)
-                    grad_b_data = np.swapaxes(grad_b.data, 1, 2)
+                    grad_a_data = np.swapaxes(grad_a.values, 1, 2)
+                    grad_b_data = np.swapaxes(grad_b.values, 1, 2)
                     one_shot_grads = clebsch_gordan.combine_einsum(
                         block_a.values[grad_a.samples["sample"]][
                             neighbor_slice, :, sel_feats[:, 0]
@@ -561,12 +557,11 @@ def cg_combine(
         )
         if grad_components is not None:
             grad_data = np.swapaxes(np.concatenate(X_grads[KEY], axis=-1), 2, 1)
-            newblock.add_gradient(
-                "positions",
-                data=grad_data,
-                samples=X_grad_samples[KEY],
-                components=[grad_components[0], sph_components],
-            )
+
+            newgrad = equistore.TensorBlock(values=grad_data, samples=X_grad_samples[KEY],
+                                            components=[grad_components[0], sph_components],
+                                            properties=newblock.properties)
+            newblock.add_gradient( "positions", newgrad)
         nz_blk.append(newblock)
     X = equistore.TensorMap(
         equistore.Labels(
@@ -701,23 +696,23 @@ def ps_normalize_inplace(vals, min_norm=MIN_NORM):
     return norm
 
 
-def ps_normalize_gradient_inplace(idx, data, values, norm, min_norm=MIN_NORM):
-    # print(data[idx,:,:].shape)  # natoms-in-mol * 3 * (2*l+1) * nfeatures
+def ps_normalize_gradient_inplace(idx, grad, values, norm, min_norm=MIN_NORM):
+    # print(grad[idx,:,:].shape)  # natoms-in-mol * 3 * (2*l+1) * nfeatures
     # print(values.shape)         # (2*l+1) * nfeatures
     if norm > min_norm:
         if values.shape[0]==1:
-            t1 = np.einsum('kxmi,mi->kx', data[idx], values)
+            t1 = np.einsum('kxmi,mi->kx', grad[idx], values)
             dnorm = np.einsum('kx,mi->kxmi', t1, values)
         else:
             p = values @ values.T
-            p1 = np.einsum('Mf,kxmf->Mmkx', values, data[idx])
+            p1 = np.einsum('Mf,kxmf->Mmkx', values, grad[idx])
             p2 = p1.transpose(1,0,2,3)
             t1 = np.einsum('Mm,Mmkx->kx', p, p1+p2)
             dnorm = 0.5*np.einsum('kx,mi->kxmi', t1, values)
-        data[idx,...] -= dnorm
-        data[idx,...] /= norm
+        grad[idx,...] -= dnorm
+        grad[idx,...] /= norm
     else:
-        data[idx,...] = 0.0
+        grad[idx,...] = 0.0
 
 
 def normalize_tensormap(soap, min_norm=MIN_NORM):
@@ -731,7 +726,7 @@ def normalize_tensormap(soap, min_norm=MIN_NORM):
                 gradient = block.gradient('positions')
                 # get indices for gradient of center id #isamp
                 igsamps = np.array([i for i, gsamp in enumerate(gradient.samples) if gsamp[0] == isamp])
-                ps_normalize_gradient_inplace(igsamps, gradient.data, block.values[isamp,:,:], norm, min_norm=min_norm)
+                ps_normalize_gradient_inplace(igsamps, gradient.values, block.values[isamp,:,:], norm, min_norm=min_norm)
 
 
 def generate_lambda_soap_wrapper(mols: list, rascal_hypers: dict, neighbor_species=None, normalize=False, min_norm=MIN_NORM, gradients=None):

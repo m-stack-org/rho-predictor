@@ -42,7 +42,7 @@ def check_gradients(soap, gradnum, max_diff=1e-6, verbose=True):
         for gpos, (sample, structure, atom) in enumerate(gblock.samples):
             for idir in range(3):
                 gnum  = gradnum[atom][idir][key].values[sample]
-                ganal = gblock.data[gpos,idir,:,:]
+                ganal = gblock.values[gpos,idir,:,:]
                 diff = np.linalg.norm(gnum-ganal)
                 if verbose:
                     print(f'{sample=} {atom=} {idir=} {diff:e}')
