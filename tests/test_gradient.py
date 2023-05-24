@@ -53,14 +53,13 @@ def check_gradients(soap, gradnum, max_diff=1e-6, verbose=True):
 
 
 def test_gradient_soap():
-    path = os.path.dirname(os.path.realpath(__file__))
-
-    xyzfile = path+'/data/H2O.xyz'
-    modelname = 'bfdb_HCNO'
+    path = os.path.dirname(os.path.realpath(__file__))+'/'
+    xyzfile = path+'data/H2O.xyz'
+    modelpath = path+'data/H2O_test'
     dr = 1e-4
     max_diff = 1e-6
 
-    model = load_model(modelname)
+    model = load_model(modelpath)
     asemol = ase.io.read(xyzfile)
     testfunc = lambda x: generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=None, normalize=True)
 
@@ -70,17 +69,15 @@ def test_gradient_soap():
 
 
 def test_gradient_kernel():
-    path = os.path.dirname(os.path.realpath(__file__))
-
-    xyzfile = path+'/data/H2O.xyz'
-    modelname = 'bfdb_HCNO'
+    path = os.path.dirname(os.path.realpath(__file__))+'/'
+    xyzfile = path+'data/H2O.xyz'
+    modelpath = path+'data/H2O_test'
     dr = 1e-4
     max_diff = 1e-6
-    refsoapfile = 'data/reference_500.npz' # TODO take something small
 
-    model = load_model(modelname)
+    model = load_model(modelpath)
     asemol = ase.io.read(xyzfile)
-    soap_ref = equistore.load(refsoapfile)
+    soap_ref = equistore.load(path+model.refsoapfile)
     def testfunc(x):
         soap = generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=model.elements, normalize=True)
         kernel = compute_kernel(soap, soap_ref)
@@ -93,19 +90,16 @@ def test_gradient_kernel():
 
 
 def test_gradient_prediction():
-    path = os.path.dirname(os.path.realpath(__file__))
-
-    xyzfile = path+'/data/H2O.xyz'
-    refsoapfile = path+'/data/H2O_ref.npz'
-    weightsfile = path+'/data/H2O_weights.npz'
-    modelname = 'bfdb_HCNO'
+    path = os.path.dirname(os.path.realpath(__file__))+'/'
+    xyzfile = path+'data/H2O.xyz'
+    modelpath = path+'data/H2O_test'
     dr = 1e-4
     max_diff = 1e-6
 
-    model = load_model(modelname)
+    model = load_model(modelpath)
     asemol = ase.io.read(xyzfile)
-    soap_ref = equistore.load(refsoapfile)
-    weights = equistore.load(weightsfile)
+    soap_ref = equistore.load(path+model.refsoapfile)
+    weights = equistore.load(path+model.weightsfile)
     def testfunc(x):
         soap = generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=model.elements, normalize=True)
         kernel = compute_kernel(soap, soap_ref)
