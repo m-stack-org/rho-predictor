@@ -15,7 +15,7 @@ def log(s, printlvl=0):
     if printlvl > 0:
         print(datetime.now(), s)
 
-def predict_sagpr(molfile, modelpath, charge=0, correct_n=True, working_dir="./", model_dir='./', printlvl=0):
+def predict_sagpr(molfile, modelpath, charge=0, correct_n=True, working_dir="./", model_dir='./', printlvl=0, write=True):
 
     # Get the model
     log('# Get the model', printlvl)
@@ -55,11 +55,12 @@ def predict_sagpr(molfile, modelpath, charge=0, correct_n=True, working_dir="./"
         correct_N_inplace(mol, c_tm)
 
     # Save the prediction
-    log('# Save the prediction', printlvl)
     c = qstack.equio.tensormap_to_vector(mol, c_tm)
-    equistore.save(working_dir+molfile+'.coeff.npz', c_tm)
-    np.savetxt(working_dir+molfile+'.coeff.dat', c)
-    qstack.fields.density2file.coeffs_to_molden(mol, c, working_dir+molfile+'.molden')
+    if write:
+        log('# Save the prediction', printlvl)
+        equistore.save(working_dir+molfile+'.coeff.npz', c_tm)
+        np.savetxt(working_dir+molfile+'.coeff.dat', c)
+        qstack.fields.density2file.coeffs_to_molden(mol, c, working_dir+molfile+'.molden')
     return c
 
 

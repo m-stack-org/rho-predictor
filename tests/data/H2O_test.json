@@ -1,0 +1,11 @@
+{
+    "refsoapfile" : "data/H2O_ref.npz",
+    "weightsfile" : "data/H2O_weights.npz",
+    "averagefile" : "data/averages.npz",
+    "basis" : "ccpvqz jkfit",
+    "elements" : [1, 6, 7, 8],
+    "cutoff": 4.0,
+    "max_radial": 8,
+    "max_angular": 6,
+    "atomic_gaussian_width": 0.3
+}
