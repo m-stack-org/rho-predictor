@@ -95,11 +95,11 @@ def test_gradient_prediction():
     path = os.path.dirname(os.path.realpath(__file__))
 
     xyzfile = path+'/data/H2O.xyz'
+    refsoapfile = path+'/data/H2O_ref.npz'
+    weightsfile = path+'/data/H2O_weights.npz'
     modelname = 'bfdb_HCNO'
     dr = 1e-4
     max_diff = 1e-6
-    refsoapfile = 'data/reference_500.npz' # TODO take something small
-    weightsfile = 'data/weights.npz'       # TODO
 
     model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname)
     asemol = ase.io.read(xyzfile)
