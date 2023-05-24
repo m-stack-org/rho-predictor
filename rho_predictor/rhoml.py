@@ -58,13 +58,13 @@ def compute_prediction(kernel, weights, averages=None):
 
     cblocks = []
     keys = keys_intersection(kernel, weights)
-    tm_labels = equistore.Labels(weights.keys.names, keys)
-    for (l, q) in tm_labels:
-        kblock = kernel.block(spherical_harmonics_l=l, species_center=q)
-        wblock = weights.block(spherical_harmonics_l=l, element=q)
+    tm_labels = equistore.Labels(kernel.keys.names, keys)
+    for key in tm_labels:
+        kblock = kernel.block(key)
+        wblock = weights.block(key)
         values = np.einsum('amMr,rMn->amn', kblock.values, wblock.values)
-        if averages and l==0:
-            values += averages.block(element=q).values
+        if averages and key[0]==0:
+            values += averages.block(species_center=key[1]).values
         cblock = equistore.TensorBlock(values=values, samples=kblock.samples,
                                        components=wblock.components, properties=wblock.properties)
 
