@@ -2,8 +2,6 @@
 
 import sys
 import numpy as np
-from pyscf import data
-import equistore.io
 import qstack
 
 def main():

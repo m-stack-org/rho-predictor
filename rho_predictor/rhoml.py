@@ -1,5 +1,5 @@
 import numpy as np
-import equistore
+import equistore.core as equistore
 
 
 def compute_kernel(soap, soap_ref):
