@@ -76,15 +76,16 @@ def compute_prediction(kernel, weights, averages=None):
         samples = kblock.samples
         properties = wblock.properties
         components = wblock.components
-        values = np.zeros((len(samples), len(components[0]), len(properties)))
-        cblocks.append(equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties))
-    coeffs = equistore.TensorMap(keys=tm_labels, blocks=cblocks)
-
-    for (l, q), cblock in coeffs:
-        wblock = weights.block(spherical_harmonics_l=l, element=q)
-        kblock = kernel.block(spherical_harmonics_l=l, species_center=q)
-        cblock.values[...] = np.einsum('amMr,rMn->amn', kblock.values, wblock.values)
+        values = np.einsum('amMr,rMn->amn', kblock.values, wblock.values)
         if averages and l==0:
-            cblock.values[...] += averages.block(element=q).values
+            values += averages.block(element=q).values
+        cblock = equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties)
 
+        if kblock.has_gradient('positions'):
+            kgrad = kblock.gradient('positions')
+            data = np.einsum('admMr,rMn->admn', kgrad.data, wblock.values)
+            cblock.add_gradient(parameter='positions', data=data, samples=kgrad.samples, components=kgrad.components[0:1]+components)
+        cblocks.append(cblock)
+
+    coeffs = equistore.TensorMap(keys=tm_labels, blocks=cblocks)
     return coeffs
