@@ -1,61 +1,77 @@
 import numpy as np
 import equistore
-import qstack.equio as equio
 
 
-def kernels_toTMap(atom_charges, kernel):
-    tm_label_vals = sorted(list(kernel.keys()), key=lambda x: x[::-1])
-    tensor_blocks = []
-    for (l, q) in tm_label_vals:
-        values = np.array(kernel[(l, q)]).transpose(0,2,3,1)
-        prop_label_vals = np.arange(values.shape[-1]).reshape(-1,1)
-        samp_label_vals = np.where(atom_charges==q)[0].reshape(-1,1)
-        comp_label_vals = np.arange(-l, l+1).reshape(-1,1)
-        properties = equistore.Labels(equio.vector_label_names.block_prop, prop_label_vals)
-        samples    = equistore.Labels(equio.vector_label_names.block_samp, samp_label_vals)
-        components = [equistore.Labels([name], comp_label_vals) for name in equio.matrix_label_names.block_comp]
-        tensor_blocks.append(equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties))
-    tm_labels = equistore.Labels(equio.vector_label_names.tm, np.array(tm_label_vals))
-    tensor = equistore.TensorMap(keys=tm_labels, blocks=tensor_blocks)
-    return tensor
+def compute_kernel(soap, soap_ref):
 
+    # Compute kernel
+    keys = keys_intersection(soap, soap_ref)
+    kblocks = []
+    tm_labels = equistore.Labels(soap.keys.names, keys)
+    for key in tm_labels:
+        sblock = soap.block(key)
+        rblock = soap_ref.block(key)
+        samples = equistore.Labels(soap.sample_names[1:2], sblock.samples.asarray()[:,[1]])
+        components = [equistore.Labels([soap.components_names[0][0]+str(i)], sblock.components[0].asarray()) for i in [1,2]]
+        values = np.einsum('rmx,aMx->aMmr', rblock.values, sblock.values)
+        kblock = equistore.TensorBlock(values=values, samples=samples, components=components, properties=rblock.samples)
+        if sblock.has_gradient('positions'):
+            sgrad = sblock.gradient('positions')
+            data = np.einsum('rmx,adMx->adMmr', rblock.values, sgrad.data)
+            kblock.add_gradient(parameter='positions', data=data,
+                                samples=sgrad.samples, components=sgrad.components[0:1]+components)
+        kblocks.append(kblock)
+    kernel = equistore.TensorMap(keys=tm_labels, blocks=kblocks)
 
-def compute_kernel(atom_charges, soap, soap_ref):
-    lmax = max(np.array([list(key) for key in soap.keys])[:,0])
-    keys1 = set([tuple(key) for key in soap.keys])
-    keys2 = set([tuple(key) for key in soap_ref.keys])
-    keys  = sorted(keys1 & keys2, key=lambda x: x[::-1])
-    kernel = {key: [] for key in keys}
+    # Normalize with zeta=2, mind the loop direction
+    elements = np.unique(tm_labels.asarray()[:,1])
+    lmax = {q: max(map(lambda x: x[0], filter(lambda x: x[1]==q, keys))) for q in elements}
+    for q in elements:
+        k0block = kernel.block(spherical_harmonics_l=0, species_center=q)
+        for l in range(lmax[q], -1, -1):
+            k1block = kernel.block(spherical_harmonics_l=l, species_center=q)
 
-    for iat, q in enumerate(atom_charges):
-        for (l,q_) in keys:
-            if q_!=q: continue
-            block = soap.block(spherical_harmonics_l=l, species_center=q)
-            isamp = block.samples.position((0, iat))
-            vals  = block.values[isamp,:,:]
-            block_ref = soap_ref.block(spherical_harmonics_l=l, species_center=q)
-            vals_ref  = block_ref.values
-            pre_kernel = np.einsum('rmx,Mx->rMm', vals_ref, vals)
-            # Normalize with zeta=2
-            if l==0:
-                factor = pre_kernel
-            kernel[(l,q)].append(pre_kernel * factor)
-    kernel = kernels_toTMap(atom_charges, kernel)
+            if k1block.has_gradient('positions'):
+                k0grad = k0block.gradient('positions')
+                k1grad = k1block.gradient('positions')
+                # gradient samples are ['sample', 'structure', 'atom']
+                # => reshaping gives [sample, atom, direction, spherical_harmonics_m1, spherical_harmonics_m2, ref_env]
+                g0 = k0grad.data.reshape(len(k0block.samples), -1, *k0grad.data.shape[1:])
+                g1 = k1grad.data.reshape(len(k1block.samples), -1, *k1grad.data.shape[1:])
+                k1g0 = np.einsum('aMmr,abdr->abdMmr', k1block.values, g0[:,:,:,0,0,:])
+                k0g1 = np.einsum('ar,abdMmr->abdMmr', k0block.values[:,0,0,:], g1)
+                k1grad.data[...] = (k1g0+k0g1).reshape(*k1grad.data.shape)
+            k1block.values[...] *= k0block.values[...]
+
     return kernel
 
 
-def compute_prediction(mol, kernel, weights, averages=None):
-    elements = set(mol.atom_charges())
-    coeffs = equio.vector_to_tensormap(mol, np.zeros(mol.nao))
-    for q in elements:
-        for l in sorted(set(equio._get_llist(q, mol))):
-            wblock = weights.block(spherical_harmonics_l=l, element=q)
-            cblock = coeffs.block(spherical_harmonics_l=l, element=q)
-            kblock = kernel.block(spherical_harmonics_l=l, element=q)
-            for sample in cblock.samples:
-                cpos = cblock.samples.position(sample)
-                kpos = kblock.samples.position(sample)
-                cblock.values[cpos,:,:] = np.einsum('mMr,rMn->mn', kblock.values[kpos], wblock.values)
-            if averages and l==0:
-                cblock.values[:,:,:] = cblock.values + averages.block(element=q).values
+def keys_intersection(t1, t2):
+    keys1 = {tuple(key) for key in t1.keys}
+    keys2 = {tuple(key) for key in t2.keys}
+    return np.array(sorted(keys1 & keys2, key=lambda x: x[::-1]))
+
+
+def compute_prediction(kernel, weights, averages=None):
+
+    cblocks = []
+    keys = keys_intersection(kernel, weights)
+    tm_labels = equistore.Labels(weights.keys.names, keys)
+    for (l, q) in tm_labels:
+        kblock = kernel.block(spherical_harmonics_l=l, species_center=q)
+        wblock = weights.block(spherical_harmonics_l=l, element=q)
+        values = np.einsum('amMr,rMn->amn', kblock.values, wblock.values)
+        if averages and l==0:
+            values += averages.block(element=q).values
+        cblock = equistore.TensorBlock(values=values, samples=kblock.samples,
+                                       components=wblock.components, properties=wblock.properties)
+
+        if kblock.has_gradient('positions'):
+            kgrad = kblock.gradient('positions')
+            data = np.einsum('admMr,rMn->admn', kgrad.data, wblock.values)
+            cblock.add_gradient(parameter='positions', data=data,
+                                samples=kgrad.samples, components=kgrad.components[0:1]+cblock.components)
+        cblocks.append(cblock)
+
+    coeffs = equistore.TensorMap(keys=tm_labels, blocks=cblocks)
     return coeffs
