@@ -12,11 +12,9 @@ def compute_kernel(soap, soap_ref):
         sblock = soap.block(key)
         rblock = soap_ref.block(key)
         samples = equistore.Labels(soap.sample_names[1:2], sblock.samples.asarray()[:,[1]])
-        properties = rblock.samples
         components = [equistore.Labels([soap.components_names[0][0]+str(i)], sblock.components[0].asarray()) for i in [1,2]]
-        values = np.zeros((len(samples), len(components[0]), len(components[1]), len(properties)))
-        kblock = equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties)
-        kblock.values[:,:,:,:] = np.einsum('rmx,aMx->aMmr', rblock.values, sblock.values)
+        values = np.einsum('rmx,aMx->aMmr', rblock.values, sblock.values)
+        kblock = equistore.TensorBlock(values=values, samples=samples, components=components, properties=rblock.samples)
         if sblock.has_gradient('positions'):
             sgrad = sblock.gradient('positions')
             data = np.einsum('rmx,adMx->adMmr', rblock.values, sgrad.data)
