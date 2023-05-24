@@ -1,16 +1,13 @@
 import numpy as np
 import equistore
-import qstack.equio as equio
 
 
 def compute_kernel(soap, soap_ref):
-    keys1 = set([tuple(key) for key in soap.keys])
-    keys2 = set([tuple(key) for key in soap_ref.keys])
-    keys  = sorted(keys1 & keys2, key=lambda x: x[::-1])
 
     # Create an empty kernel tmap
+    keys = keys_intersection(soap, soap_ref)
     kblocks = []
-    tm_labels = equistore.Labels(soap.keys.names, np.array(keys))
+    tm_labels = equistore.Labels(soap.keys.names, keys)
     for key in tm_labels:
         sblock = soap.block(key)
         rblock = soap_ref.block(key)
@@ -46,6 +43,7 @@ def compute_kernel(soap, soap_ref):
         k0block = kernel.block(spherical_harmonics_l=0, species_center=q)
         for l in range(lmax[q], -1, -1):
             k1block  = kernel.block(spherical_harmonics_l=l, species_center=q)
+
             if k1block.has_gradient('positions'):
                 k0grad = k0block.gradient('positions')
                 k1grad = k1block.gradient('positions')
@@ -61,18 +59,32 @@ def compute_kernel(soap, soap_ref):
     return kernel
 
 
-def compute_prediction(mol, kernel, weights, averages=None):
-    elements = set(mol.atom_charges())
-    coeffs = equio.vector_to_tensormap(mol, np.zeros(mol.nao))
-    for q in elements:
-        for l in sorted(set(equio._get_llist(q, mol))):
-            wblock = weights.block(spherical_harmonics_l=l, element=q)
-            cblock = coeffs.block(spherical_harmonics_l=l, element=q)
-            kblock = kernel.block(spherical_harmonics_l=l, species_center=q)
-            for sample in cblock.samples:
-                cpos = cblock.samples.position(sample)
-                kpos = kblock.samples.position(sample)
-                cblock.values[cpos,:,:] = np.einsum('mMr,rMn->mn', kblock.values[kpos], wblock.values)
-            if averages and l==0:
-                cblock.values[:,:,:] = cblock.values + averages.block(element=q).values
+def keys_intersection(t1, t2):
+    keys1 = {tuple(key) for key in t1.keys}
+    keys2 = {tuple(key) for key in t2.keys}
+    return np.array(sorted(keys1 & keys2, key=lambda x: x[::-1]))
+
+
+def compute_prediction(kernel, weights, averages=None):
+
+    cblocks = []
+    keys = keys_intersection(kernel, weights)
+    tm_labels = equistore.Labels(weights.keys.names, keys)
+    for key in tm_labels:
+        kblock = kernel.block(spherical_harmonics_l=key[0], species_center=key[1])
+        wblock = weights.block(key)
+        samples = kblock.samples
+        properties = wblock.properties
+        components = wblock.components
+        values = np.zeros((len(samples), len(components[0]), len(properties)))
+        cblocks.append(equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties))
+    coeffs = equistore.TensorMap(keys=tm_labels, blocks=cblocks)
+
+    for (l, q), cblock in coeffs:
+        wblock = weights.block(spherical_harmonics_l=l, element=q)
+        kblock = kernel.block(spherical_harmonics_l=l, species_center=q)
+        cblock.values[...] = np.einsum('amMr,rMn->amn', kblock.values, wblock.values)
+        if averages and l==0:
+            cblock.values[...] += averages.block(element=q).values
+
     return coeffs

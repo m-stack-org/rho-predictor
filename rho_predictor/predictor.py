@@ -49,7 +49,7 @@ def predict_sagpr(molfile, modelname, charge=0, correct_n = True, working_dir=".
 
     # Compute the prediction
     log('# Compute the prediction', printlvl)
-    c_tm = compute_prediction(mol, kernel, weights, averages)
+    c_tm = compute_prediction(kernel, weights, averages)
 
     # Correct the number of electrons
     if correct_n:
