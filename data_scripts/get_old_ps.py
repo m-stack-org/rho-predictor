@@ -6,14 +6,11 @@ Loads old PS files and saves the reference PS in the equistore format
 TODO almost the same as get_old_ref_ps.py -> merge
 '''
 
-
-
 import gc
 import glob
 import numpy as np
 import ase.io
-import equistore.io
-
+import equistore.core as equistore
 
 def convert_to_tmap(pslist, ref_q):
 
@@ -60,4 +57,4 @@ if __name__=='__main__':
     pslist = ['PS_2300/PS'+str(l)+'_2300.npy' for l in range(lmax+1)]
     mol = ase.io.read('H6C2____monA_0932.xyz')
     tensor = convert_to_tmap(pslist, mol.numbers)
-    equistore.io.save('ethane.npz', tensor)
+    equistore.save('ethane.npz', tensor)

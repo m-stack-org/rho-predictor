@@ -9,14 +9,12 @@ Output:
     - one big npz containing λ-soap
 '''
 
-import sys
-sys.path.insert(1, '../')
 import gc
 import glob
 import numpy as np
 import ase.io
-import equistore.io
-from utils.lsoap import ps_normalize_inplace
+import equistore.core as equistore
+from rho_predictor.lsoap import ps_normalize_inplace
 
 def get_ref_idx(mollist, refs):
     mols = []
@@ -53,7 +51,7 @@ def merge_ref_ps(idx, normalize=False):
         mol_id, atom_id  = ref
         q = mols[mol_id][atom_id].number
         ref_q[iref] = q
-        tensor = equistore.io.load(mollist[mol_id]+'.npz')
+        tensor = equistore.load(mollist[mol_id]+'.npz')
 
         for l in range(lmax+1):
             key = (l, q)
@@ -89,7 +87,7 @@ def merge_ref_ps(idx, normalize=False):
 if __name__=='__main__':
     lmax = 5
 
-    mydir = "../bfdb_with_s/"
+    mydir = "bfdb_with_s/"
     mollist = [mydir+f for f in np.loadtxt(mydir+"mollist.txt", dtype=str)]
     refs = np.loadtxt(mydir+'refs_selection_500.txt', dtype=int)
 
@@ -97,5 +95,5 @@ if __name__=='__main__':
     tensor, ref_q = merge_ref_ps(idx, normalize=True)
     print(tensor)
 
-    equistore.io.save('reference_500.npz', tensor)
+    equistore.save('reference_500.npz', tensor)
     np.save('reference_500_q.npy', ref_q)
