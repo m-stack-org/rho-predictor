@@ -2,12 +2,11 @@
 
 import numpy as np
 from pyscf import data
-import equistore
-import equistore.io
+import equistore.core as equistore
 from qstack import equio
 
 elements = [1, 6, 7, 8, 16]
-averages = {q: np.load('../bfdb_with_s/AVERAGES/'+data.elements.ELEMENTS[q]+'.npy') for q in elements}
+averages = {q: np.load('bfdb_with_s/AVERAGES/'+data.elements.ELEMENTS[q]+'.npy') for q in elements}
 
 tm_label_vals = []
 tensor_blocks = []
@@ -24,4 +23,4 @@ for q in elements:
 tm_labels = equistore.Labels(equio.vector_label_names.tm, np.array(tm_label_vals))
 tensor = equistore.TensorMap(keys=tm_labels, blocks=tensor_blocks)
 
-equistore.io.save('averages.npz', tensor)
+equistore.save('averages.npz', tensor)

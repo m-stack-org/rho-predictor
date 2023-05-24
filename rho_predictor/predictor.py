@@ -5,7 +5,7 @@ from datetime import datetime
 import numpy as np
 import ase.io
 from pyscf import data
-import equistore.io
+import equistore.core as equistore
 import qstack
 import qstack.equio
 from rho_predictor.lsoap import generate_lambda_soap_wrapper
@@ -33,15 +33,15 @@ def predict_sagpr(molfile, modelname, charge=0, correct_n = True, working_dir=".
 
     # Load regression weights
     log('# Load regression weights', printlvl)
-    weights = equistore.io.load(model_dir+model.weightsfile)
+    weights = equistore.load(model_dir+model.weightsfile)
 
     # Load the averages
     log('# Load the averages', printlvl)
-    averages = equistore.io.load(model_dir+model.averagefile)
+    averages = equistore.load(model_dir+model.averagefile)
 
     # Load λ-SOAP for the reference environments
     log('# Load λ-SOAP for the reference environments', printlvl)
-    soap_ref = equistore.io.load(model_dir+model.refsoapfile)
+    soap_ref = equistore.load(model_dir+model.refsoapfile)
 
     # Compute the kernel
     log('# Compute the kernel', printlvl)
@@ -58,7 +58,7 @@ def predict_sagpr(molfile, modelname, charge=0, correct_n = True, working_dir=".
     # Save the prediction
     log('# Save the prediction', printlvl)
     c = qstack.equio.tensormap_to_vector(mol, c_tm)
-    equistore.io.save(working_dir+molfile+'.coeff.npz', c_tm)
+    equistore.save(working_dir+molfile+'.coeff.npz', c_tm)
     np.savetxt(working_dir+molfile+'.coeff.dat', c)
     qstack.fields.density2file.coeffs_to_molden(mol, c, working_dir+molfile+'.molden')
     return c

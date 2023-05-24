@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
 import sys
-sys.path.insert(1, '../')
 import numpy as np
-import equistore.io
-from utils.lsoap import ps_normalize_inplace
+import equistore.core as equistore
+from rho_predictor.lsoap import ps_normalize_inplace
 
 
 if __name__=='__main__':
@@ -12,7 +11,7 @@ if __name__=='__main__':
     qs = [1, 6, 7, 8, 16]
     normalize = True
 
-    tensor = equistore.io.load(sys.argv[1])
+    tensor = equistore.load(sys.argv[1])
     i = int(sys.argv[2])
 
     for l in range(lmax+1):

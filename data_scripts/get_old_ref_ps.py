@@ -8,7 +8,7 @@ import gc
 import glob
 import numpy as np
 import ase.io
-import equistore.io
+import equistore.core as equistore
 
 
 def convert_to_tmap(pslist, ref_q):
@@ -49,4 +49,4 @@ if __name__=='__main__':
     pslist = ['PS_REF/PS'+str(l)+'_1000.npy' for l in range(lmax+1)]
     ref_q = np.load('reference_q.npy')
     tensor = convert_to_tmap(pslist, ref_q)
-    equistore.io.save('reference_old.npz', tensor)
+    equistore.save('reference_old.npz', tensor)

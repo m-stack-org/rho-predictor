@@ -1,15 +1,10 @@
 # code from Joe
 
-import pickle
 import re
 import numpy as np
 import wigners
-
-# HACK: load the rascaline library before loading any equistore function
-import rascaline
-rascaline._c_lib._get_library()
 from rascaline import SphericalExpansion
-from equistore import io, Labels, TensorBlock, TensorMap
+from equistore.core import Labels, TensorBlock, TensorMap
 
 # === CG Iteration code, copied into a single place.
 
@@ -298,24 +293,20 @@ def acdc_standardize_keys(descriptor):
             key = (1,) + key
         keys.append(key)
         property_names = _remove_suffix(block.properties.names, "_1")
-        blocks.append(
-            TensorBlock(
-                values=block.values,
-                samples=block.samples,
-                components=block.components,
-                properties=Labels(
-                    property_names,
-                    np.asarray(block.properties.view(dtype=np.int32)).reshape(
-                        -1, len(property_names)
-                    ),
-                ),
-            )
-        )
-        for parameter, gradient in block.gradients():
-            blocks[-1].add_gradient(parameter=parameter,
-                                    data=gradient.data,
-                                    samples=gradient.samples,
-                                    components=gradient.components)
+        newblock = TensorBlock(
+                       values=block.values,
+                       samples=block.samples,
+                       components=block.components,
+                       properties=Labels(
+                           property_names,
+                           np.asarray(block.properties.view(dtype=np.int32)).reshape(-1, len(property_names)),
+                       ),
+                   )
+        for parameter, grad in block.gradients():
+            newgrad = TensorBlock(values=grad.values, samples=grad.samples,
+                                   components=grad.components, properties=newblock.properties)
+            newblock.add_gradient(parameter, newgrad)
+        blocks.append(newblock)
 
     if not "inversion_sigma" in key_names:
         key_names = ("inversion_sigma",) + key_names
@@ -513,8 +504,8 @@ def cg_combine(
                 if grad_components is not None:
                     grad_a = block_a.gradient("positions")
                     grad_b = block_b.gradient("positions")
-                    grad_a_data = np.swapaxes(grad_a.data, 1, 2)
-                    grad_b_data = np.swapaxes(grad_b.data, 1, 2)
+                    grad_a_data = np.swapaxes(grad_a.values, 1, 2)
+                    grad_b_data = np.swapaxes(grad_b.values, 1, 2)
                     one_shot_grads = clebsch_gordan.combine_einsum(
                         block_a.values[grad_a.samples["sample"]][
                             neighbor_slice, :, sel_feats[:, 0]
@@ -561,12 +552,11 @@ def cg_combine(
         )
         if grad_components is not None:
             grad_data = np.swapaxes(np.concatenate(X_grads[KEY], axis=-1), 2, 1)
-            newblock.add_gradient(
-                "positions",
-                data=grad_data,
-                samples=X_grad_samples[KEY],
-                components=[grad_components[0], sph_components],
-            )
+
+            newgrad = TensorBlock(values=grad_data, samples=X_grad_samples[KEY],
+                                  components=[grad_components[0], sph_components],
+                                  properties=newblock.properties)
+            newblock.add_gradient( "positions", newgrad)
         nz_blk.append(newblock)
     X = TensorMap(
         Labels(
@@ -701,23 +691,23 @@ def ps_normalize_inplace(vals, min_norm=MIN_NORM):
     return norm
 
 
-def ps_normalize_gradient_inplace(idx, data, values, norm, min_norm=MIN_NORM):
-    # print(data[idx,:,:].shape)  # natoms-in-mol * 3 * (2*l+1) * nfeatures
+def ps_normalize_gradient_inplace(idx, grad, values, norm, min_norm=MIN_NORM):
+    # print(grad[idx,:,:].shape)  # natoms-in-mol * 3 * (2*l+1) * nfeatures
     # print(values.shape)         # (2*l+1) * nfeatures
     if norm > min_norm:
         if values.shape[0]==1:
-            t1 = np.einsum('kxmi,mi->kx', data[idx], values)
+            t1 = np.einsum('kxmi,mi->kx', grad[idx], values)
             dnorm = np.einsum('kx,mi->kxmi', t1, values)
         else:
             p = values @ values.T
-            p1 = np.einsum('Mf,kxmf->Mmkx', values, data[idx])
+            p1 = np.einsum('Mf,kxmf->Mmkx', values, grad[idx])
             p2 = p1.transpose(1,0,2,3)
             t1 = np.einsum('Mm,Mmkx->kx', p, p1+p2)
             dnorm = 0.5*np.einsum('kx,mi->kxmi', t1, values)
-        data[idx,...] -= dnorm
-        data[idx,...] /= norm
+        grad[idx,...] -= dnorm
+        grad[idx,...] /= norm
     else:
-        data[idx,...] = 0.0
+        grad[idx,...] = 0.0
 
 
 def normalize_tensormap(soap, min_norm=MIN_NORM):
@@ -731,14 +721,47 @@ def normalize_tensormap(soap, min_norm=MIN_NORM):
                 gradient = block.gradient('positions')
                 # get indices for gradient of center id #isamp
                 igsamps = np.array([i for i, gsamp in enumerate(gradient.samples) if gsamp[0] == isamp])
-                ps_normalize_gradient_inplace(igsamps, gradient.data, block.values[isamp,:,:], norm, min_norm=min_norm)
+                ps_normalize_gradient_inplace(igsamps, gradient.values, block.values[isamp,:,:], norm, min_norm=min_norm)
 
 
-def generate_lambda_soap_wrapper(mols: list, rascal_hypers: dict, neighbor_species=None, normalize=False, min_norm=MIN_NORM, gradients=None):
+def generate_lambda_soap_wrapper(mols: list, rascal_hypers: dict, neighbor_species=None, normalize=True, min_norm=MIN_NORM, lmax=None, gradients=None):
     if not isinstance(mols, list):
         mols = [mols]
     soap = generate_lambda_soap(frames=mols, rascal_hypers=rascal_hypers, neighbor_species=neighbor_species, gradients=gradients)
     soap = clean_lambda_soap(soap)
+    if lmax:
+        soap = remove_high_l(soap, lmax)
     if normalize:
         normalize_tensormap(soap, min_norm=min_norm)
     return soap
+
+
+def remove_high_l(lsoap: TensorMap, lmax: dict):
+    """
+    A function that performs some cleaning of the lambda-SOAP representation,
+        - Drop the blocks ``('spherical_harmonics_l', 'species_center')``
+          if spherical_harmonics_l > lmax[species_center]
+    """
+    new_keys, new_blocks = [], []
+    for (l, q), block in lsoap:
+        if l <= lmax[q]:
+            new_keys.append((l, q))
+            new_blocks.append(block.copy())
+
+    lsoap_cleaned = TensorMap(
+        keys=Labels(names=lsoap.keys.names, values=np.array(new_keys)),
+        blocks=new_blocks,
+    )
+    return lsoap_cleaned
+
+
+def make_rascal_hypers(soap_rcut, soap_ncut, soap_lcut, soap_sigma):
+    return {
+        "cutoff": soap_rcut,
+        "max_radial": soap_ncut,
+        "max_angular": soap_lcut,
+        "atomic_gaussian_width": soap_sigma,
+        "radial_basis": {"Gto": {}},
+        "cutoff_function": {"ShiftedCosine": {"width": 0.5}},
+        "center_atom_weight": 1.0,
+    }

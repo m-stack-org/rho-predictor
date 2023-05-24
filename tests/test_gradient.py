@@ -3,7 +3,7 @@
 import os
 import numpy as np
 import ase.io
-import equistore.io
+import equistore.core as equistore
 from rho_predictor.lsoap import generate_lambda_soap_wrapper
 from rho_predictor.rhoml import compute_kernel, compute_prediction
 
@@ -42,7 +42,7 @@ def check_gradients(soap, gradnum, max_diff=1e-6, verbose=True):
         for gpos, (sample, structure, atom) in enumerate(gblock.samples):
             for idir in range(3):
                 gnum  = gradnum[atom][idir][key].values[sample]
-                ganal = gblock.data[gpos,idir,:,:]
+                ganal = gblock.values[gpos,idir,:,:]
                 diff = np.linalg.norm(gnum-ganal)
                 if verbose:
                     print(f'{sample=} {atom=} {idir=} {diff:e}')
@@ -79,7 +79,7 @@ def test_gradient_kernel():
 
     model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname)
     asemol = ase.io.read(xyzfile)
-    soap_ref = equistore.io.load(refsoapfile)
+    soap_ref = equistore.load(refsoapfile)
     def testfunc(x):
         soap = generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=model.elements, normalize=True)
         kernel = compute_kernel(soap, soap_ref)
@@ -103,8 +103,8 @@ def test_gradient_prediction():
 
     model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname)
     asemol = ase.io.read(xyzfile)
-    soap_ref = equistore.io.load(refsoapfile)
-    weights = equistore.io.load(weightsfile)
+    soap_ref = equistore.load(refsoapfile)
+    weights = equistore.load(weightsfile)
     def testfunc(x):
         soap = generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=model.elements, normalize=True)
         kernel = compute_kernel(soap, soap_ref)
