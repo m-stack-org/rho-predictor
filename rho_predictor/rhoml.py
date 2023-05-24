@@ -4,7 +4,7 @@ import equistore
 
 def compute_kernel(soap, soap_ref):
 
-    # Create an empty kernel tmap
+    # Compute kernel
     keys = keys_intersection(soap, soap_ref)
     kblocks = []
     tm_labels = equistore.Labels(soap.keys.names, keys)
@@ -15,26 +15,15 @@ def compute_kernel(soap, soap_ref):
         properties = rblock.samples
         components = [equistore.Labels([soap.components_names[0][0]+str(i)], sblock.components[0].asarray()) for i in [1,2]]
         values = np.zeros((len(samples), len(components[0]), len(components[1]), len(properties)))
-        kblocks.append(equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties))
-        if sblock.has_gradient('positions'):
-            gradient = sblock.gradient('positions')
-            kblocks[-1].add_gradient(parameter='positions',
-                                     data=np.zeros(gradient.data.shape[:2] + values.shape[1:]),
-                                     samples=gradient.samples,
-                                     components=gradient.components[0:1]+components)
-    kernel = equistore.TensorMap(keys=tm_labels, blocks=kblocks)
-
-    # Compute kernel
-    for key in tm_labels:
-        sblock = soap.block(key)
-        rblock = soap_ref.block(key)
-        kblock = kernel.block(key)
+        kblock = equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties)
         kblock.values[:,:,:,:] = np.einsum('rmx,aMx->aMmr', rblock.values, sblock.values)
-
-        if kblock.has_gradient('positions'):
+        if sblock.has_gradient('positions'):
             sgrad = sblock.gradient('positions')
-            kgrad = kblock.gradient('positions')
-            kgrad.data[:,:,:,:,:] = np.einsum('rmx,adMx->adMmr', rblock.values, sgrad.data[:,:,:,:])
+            data = np.einsum('rmx,adMx->adMmr', rblock.values, sgrad.data)
+            kblock.add_gradient(parameter='positions', data=data,
+                                samples=sgrad.samples, components=sgrad.components[0:1]+components)
+        kblocks.append(kblock)
+    kernel = equistore.TensorMap(keys=tm_labels, blocks=kblocks)
 
     # Normalize with zeta=2, mind the loop direction
     elements = np.unique(tm_labels.asarray()[:,1])
@@ -42,7 +31,7 @@ def compute_kernel(soap, soap_ref):
     for q in elements:
         k0block = kernel.block(spherical_harmonics_l=0, species_center=q)
         for l in range(lmax[q], -1, -1):
-            k1block  = kernel.block(spherical_harmonics_l=l, species_center=q)
+            k1block = kernel.block(spherical_harmonics_l=l, species_center=q)
 
             if k1block.has_gradient('positions'):
                 k0grad = k0block.gradient('positions')
@@ -73,18 +62,17 @@ def compute_prediction(kernel, weights, averages=None):
     for key in tm_labels:
         kblock = kernel.block(spherical_harmonics_l=key[0], species_center=key[1])
         wblock = weights.block(key)
-        samples = kblock.samples
-        properties = wblock.properties
-        components = wblock.components
         values = np.einsum('amMr,rMn->amn', kblock.values, wblock.values)
         if averages and l==0:
             values += averages.block(element=q).values
-        cblock = equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties)
+        cblock = equistore.TensorBlock(values=values, samples=kblock.samples,
+                                       components=wblock.components, properties=wblock.properties)
 
         if kblock.has_gradient('positions'):
             kgrad = kblock.gradient('positions')
             data = np.einsum('admMr,rMn->admn', kgrad.data, wblock.values)
-            cblock.add_gradient(parameter='positions', data=data, samples=kgrad.samples, components=kgrad.components[0:1]+components)
+            cblock.add_gradient(parameter='positions', data=data,
+                                samples=kgrad.samples, components=kgrad.components[0:1]+cblock.components)
         cblocks.append(cblock)
 
     coeffs = equistore.TensorMap(keys=tm_labels, blocks=cblocks)
