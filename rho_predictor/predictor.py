@@ -4,23 +4,22 @@ import sys
 from datetime import datetime
 import numpy as np
 import ase.io
-from pyscf import data
 import equistore.core as equistore
 import qstack
 import qstack.equio
 from rho_predictor.lsoap import generate_lambda_soap_wrapper
 from rho_predictor.rhoml import compute_kernel, compute_prediction
-from rho_predictor.rhotools import correct_N_inplace
+from rho_predictor.rhotools import correct_N_inplace, load_model
 
 def log(s, printlvl=0):
     if printlvl > 0:
         print(datetime.now(), s)
 
-def predict_sagpr(molfile, modelname, charge=0, correct_n = True, working_dir="./", model_dir='./', printlvl=0):
+def predict_sagpr(molfile, modelpath, charge=0, correct_n=True, working_dir="./", model_dir='./', printlvl=0):
 
     # Get the model
     log('# Get the model', printlvl)
-    model = getattr(__import__("rho_predictor.models", fromlist=[modelname]), modelname) # TODO
+    model = load_model(modelpath)
 
     # Load the molecule
     log('# Load the molecule', printlvl)
