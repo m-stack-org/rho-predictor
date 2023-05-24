@@ -1,15 +1,10 @@
 # code from Joe
 
-import pickle
 import re
 import numpy as np
 import wigners
-
-# HACK: load the rascaline library before loading any equistore function
-import rascaline
-rascaline._c_lib._get_library()
 from rascaline import SphericalExpansion
-import equistore.core as equistore
+from equistore.core import Labels, TensorBlock, TensorMap
 
 # === CG Iteration code, copied into a single place.
 
@@ -298,18 +293,18 @@ def acdc_standardize_keys(descriptor):
             key = (1,) + key
         keys.append(key)
         property_names = _remove_suffix(block.properties.names, "_1")
-        newblock = equistore.TensorBlock(
-                           values=block.values,
-                           samples=block.samples,
-                           components=block.components,
-                           properties=equistore.Labels(
-                               property_names,
-                               np.asarray(block.properties.view(dtype=np.int32)).reshape(-1, len(property_names)),
-                           ),
-                       )
+        newblock = TensorBlock(
+                       values=block.values,
+                       samples=block.samples,
+                       components=block.components,
+                       properties=Labels(
+                           property_names,
+                           np.asarray(block.properties.view(dtype=np.int32)).reshape(-1, len(property_names)),
+                       ),
+                   )
         for parameter, grad in block.gradients():
-            newgrad = equistore.TensorBlock(values=grad.values, samples=grad.samples,
-                                            components=grad.components, properties=newblock.properties)
+            newgrad = TensorBlock(values=grad.values, samples=grad.samples,
+                                   components=grad.components, properties=newblock.properties)
             newblock.add_gradient(parameter, newgrad)
         blocks.append(newblock)
 
@@ -318,8 +313,8 @@ def acdc_standardize_keys(descriptor):
     if not "order_nu" in key_names:
         key_names = ("order_nu",) + key_names
 
-    return equistore.TensorMap(
-        keys=equistore.Labels(names=key_names, values=np.asarray(keys, dtype=np.int32)),
+    return TensorMap(
+        keys=Labels(names=key_names, values=np.asarray(keys, dtype=np.int32)),
         blocks=blocks,
     )
 
@@ -542,29 +537,29 @@ def cg_combine(
             continue  # skips empty blocks
         nz_idx.append(KEY)
         block_data = np.concatenate(X_blocks[KEY], axis=-1)
-        sph_components = equistore.Labels(
+        sph_components = Labels(
             ["spherical_harmonics_m"],
             np.asarray(range(-L, L + 1), dtype=np.int32).reshape(-1, 1),
         )
-        newblock = equistore.TensorBlock(
+        newblock = TensorBlock(
             # feature index must be last
             values=block_data,
             samples=X_samples[KEY],
             components=[sph_components],
-            properties=equistore.Labels(
+            properties=Labels(
                 feature_names, np.asarray(np.vstack(X_idx[KEY]), dtype=np.int32)
             ),
         )
         if grad_components is not None:
             grad_data = np.swapaxes(np.concatenate(X_grads[KEY], axis=-1), 2, 1)
 
-            newgrad = equistore.TensorBlock(values=grad_data, samples=X_grad_samples[KEY],
-                                            components=[grad_components[0], sph_components],
-                                            properties=newblock.properties)
+            newgrad = TensorBlock(values=grad_data, samples=X_grad_samples[KEY],
+                                  components=[grad_components[0], sph_components],
+                                  properties=newblock.properties)
             newblock.add_gradient( "positions", newgrad)
         nz_blk.append(newblock)
-    X = equistore.TensorMap(
-        equistore.Labels(
+    X = TensorMap(
+        Labels(
             ["order_nu", "inversion_sigma", "spherical_harmonics_l"] + OTHER_KEYS,
             np.asarray(nz_idx, dtype=np.int32),
         ),
@@ -643,7 +638,7 @@ def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=Non
         acdc_nu1 = acdc_nu1.keys_to_properties("species_neighbor")
     else:
         acdc_nu1 = acdc_nu1.keys_to_properties(
-            keys_to_move=equistore.Labels(
+            keys_to_move=Labels(
             names=("species_neighbor",),
             values=np.array(neighbor_species).reshape(-1, 1),
         )
@@ -661,7 +656,7 @@ def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=Non
     return acdc_nu2
 
 
-def clean_lambda_soap(lsoap: equistore.TensorMap):
+def clean_lambda_soap(lsoap: TensorMap):
     """
     A function that performs some cleaning of the lambda-SOAP representation,
         - Drop blocks with ``'inversion_sigma' = -1``
@@ -675,8 +670,8 @@ def clean_lambda_soap(lsoap: equistore.TensorMap):
             new_keys.append([key[2], key[3]])
             new_blocks.append(block.copy())
 
-    lsoap_cleaned = equistore.TensorMap(
-        keys=equistore.Labels(
+    lsoap_cleaned = TensorMap(
+        keys=Labels(
             names=["spherical_harmonics_l", "species_center"], values=np.array(new_keys)
         ),
         blocks=new_blocks,
@@ -729,11 +724,44 @@ def normalize_tensormap(soap, min_norm=MIN_NORM):
                 ps_normalize_gradient_inplace(igsamps, gradient.values, block.values[isamp,:,:], norm, min_norm=min_norm)
 
 
-def generate_lambda_soap_wrapper(mols: list, rascal_hypers: dict, neighbor_species=None, normalize=False, min_norm=MIN_NORM, gradients=None):
+def generate_lambda_soap_wrapper(mols: list, rascal_hypers: dict, neighbor_species=None, normalize=True, min_norm=MIN_NORM, lmax=None, gradients=None):
     if not isinstance(mols, list):
         mols = [mols]
     soap = generate_lambda_soap(frames=mols, rascal_hypers=rascal_hypers, neighbor_species=neighbor_species, gradients=gradients)
     soap = clean_lambda_soap(soap)
+    if lmax:
+        soap = remove_high_l(soap, lmax)
     if normalize:
         normalize_tensormap(soap, min_norm=min_norm)
     return soap
+
+
+def remove_high_l(lsoap: TensorMap, lmax: dict):
+    """
+    A function that performs some cleaning of the lambda-SOAP representation,
+        - Drop the blocks ``('spherical_harmonics_l', 'species_center')``
+          if spherical_harmonics_l > lmax[species_center]
+    """
+    new_keys, new_blocks = [], []
+    for (l, q), block in lsoap:
+        if l <= lmax[q]:
+            new_keys.append((l, q))
+            new_blocks.append(block.copy())
+
+    lsoap_cleaned = TensorMap(
+        keys=Labels(names=lsoap.keys.names, values=np.array(new_keys)),
+        blocks=new_blocks,
+    )
+    return lsoap_cleaned
+
+
+def make_rascal_hypers(soap_rcut, soap_ncut, soap_lcut, soap_sigma):
+    return {
+        "cutoff": soap_rcut,
+        "max_radial": soap_ncut,
+        "max_angular": soap_lcut,
+        "atomic_gaussian_width": soap_sigma,
+        "radial_basis": {"Gto": {}},
+        "cutoff_function": {"ShiftedCosine": {"width": 0.5}},
+        "center_atom_weight": 1.0,
+    }
