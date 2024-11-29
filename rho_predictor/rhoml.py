@@ -11,8 +11,8 @@ def compute_kernel(soap, soap_ref):
     for key in tm_labels:
         sblock = soap.block(key)
         rblock = soap_ref.block(key)
-        samples = metatensor.Labels(soap.sample_names[1:2], sblock.samples.asarray()[:,[1]])
-        components = [metatensor.Labels([soap.components_names[0][0]+str(i)], sblock.components[0].asarray()) for i in [1,2]]
+        samples = metatensor.Labels(soap.sample_names[1:2], np.array(sblock.samples)[:,[1]])
+        components = [metatensor.Labels([soap.component_names[0][0]+str(i)], np.array(sblock.components[0])) for i in [1,2]]
         values = np.einsum('rmx,aMx->aMmr', rblock.values, sblock.values)
         kblock = metatensor.TensorBlock(values=values, samples=samples, components=components, properties=rblock.samples)
         if sblock.has_gradient('positions'):
@@ -26,12 +26,12 @@ def compute_kernel(soap, soap_ref):
     kernel = metatensor.TensorMap(keys=tm_labels, blocks=kblocks)
 
     # Normalize with zeta=2, mind the loop direction
-    elements = np.unique(tm_labels.asarray()[:,1])
+    elements = np.unique(np.array(tm_labels)[:,1])
     lmax = {q: max(map(lambda x: x[0], filter(lambda x: x[1]==q, keys))) for q in elements}
     for q in elements:
-        k0block = kernel.block(spherical_harmonics_l=0, species_center=q)
+        k0block = kernel.block(o3_lambda=0, center_type=q)
         for l in range(lmax[q], -1, -1):
-            k1block = kernel.block(spherical_harmonics_l=l, species_center=q)
+            k1block = kernel.block(o3_lambda=l, center_type=q)
 
             if k1block.has_gradient('positions'):
                 k0grad = k0block.gradient('positions')
@@ -64,7 +64,7 @@ def compute_prediction(kernel, weights, averages=None):
         wblock = weights.block(key)
         values = np.einsum('amMr,rMn->amn', kblock.values, wblock.values)
         if averages and key[0]==0:
-            values += averages.block(species_center=key[1]).values
+            values += averages.block(center_type=key[1]).values
         cblock = metatensor.TensorBlock(values=values, samples=kblock.samples,
                                        components=wblock.components, properties=wblock.properties)
 

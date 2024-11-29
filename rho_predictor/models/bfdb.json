@@ -7,7 +7,7 @@
     "elements" : [1, 6, 7, 8, 16],
 
     "cutoff": 4.0,
-    "max_radial": 8,
+    "max_radial": 7,
     "max_angular": 6,
     "atomic_gaussian_width": 0.3
 }

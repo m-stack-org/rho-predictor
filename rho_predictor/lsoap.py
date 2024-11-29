@@ -279,27 +279,28 @@ def acdc_standardize_keys(descriptor):
     """
 
     key_names = descriptor.keys.names
-    if not "spherical_harmonics_l" in key_names:
+    if not "o3_lambda" in key_names:
         raise ValueError(
-            "Descriptor missing spherical harmonics channel key `spherical_harmonics_l`"
+            "Descriptor missing spherical harmonics channel key `o3_lambda`"
         )
     blocks = []
     keys = []
-    for key, block in descriptor:
+    for key, block in descriptor.items():
         key = tuple(key)
-        if not "inversion_sigma" in key_names:
+        if not "o3_sigma" in key_names:
             key = (1,) + key
         if not "order_nu" in key_names:
             key = (1,) + key
         keys.append(key)
         property_names = _remove_suffix(block.properties.names, "_1")
+
         newblock = TensorBlock(
                        values=block.values,
                        samples=block.samples,
                        components=block.components,
                        properties=Labels(
                            property_names,
-                           np.asarray(block.properties.view(dtype=np.int32)).reshape(-1, len(property_names)),
+                           np.asarray(block.properties.view(dimensions=['n']), dtype=np.int32).reshape(-1, len(property_names)),
                        ),
                    )
         for parameter, grad in block.gradients():
@@ -308,10 +309,10 @@ def acdc_standardize_keys(descriptor):
             newblock.add_gradient(parameter, newgrad)
         blocks.append(newblock)
 
-    if not "inversion_sigma" in key_names:
-        key_names = ("inversion_sigma",) + key_names
+    if not "o3_sigma" in key_names:
+        key_names = ("o3_sigma",) + tuple(key_names)
     if not "order_nu" in key_names:
-        key_names = ("order_nu",) + key_names
+        key_names = ("order_nu",) + tuple(key_names)
 
     return TensorMap(
         keys=Labels(names=key_names, values=np.asarray(keys, dtype=np.int32)),
@@ -329,7 +330,7 @@ def cg_combine(
 ):
     """
     Performs a CG product of two sets of equivariants. Only requirement is that
-    sparse indices are labeled as ("inversion_sigma", "spherical_harmonics_l",
+    sparse indices are labeled as ("o3_sigma", "o3_lambda",
     "order_nu"). The automatically-determined naming of output features can be
     overridden by giving a list of "feature_names". By defaults, all other key
     labels are combined in an "outer product" mode, i.e. if there is a key-side
@@ -338,13 +339,13 @@ def cg_combine(
     a list `other_keys_match` of keys that should match, these are not
     outer-producted, but combined together. for instance, passing `["species
     center"]` means that the keys with the same species center will be combined
-    together, but yield a single key with the same species_center in the
+    together, but yield a single key with the same center_type in the
     results.
     """
 
     # determines the cutoff in the new features
-    lmax_a = max(x_a.keys["spherical_harmonics_l"])
-    lmax_b = max(x_b.keys["spherical_harmonics_l"])
+    lmax_a = max(x_a.keys["o3_lambda"])
+    lmax_b = max(x_b.keys["o3_lambda"])
     if lcut is None:
         lcut = lmax_a + lmax_b
 
@@ -355,12 +356,12 @@ def cg_combine(
     other_keys_a = tuple(
         name
         for name in x_a.keys.names
-        if name not in ["spherical_harmonics_l", "order_nu", "inversion_sigma"]
+        if name not in ["o3_lambda", "order_nu", "o3_sigma"]
     )
     other_keys_b = tuple(
         name
         for name in x_b.keys.names
-        if name not in ["spherical_harmonics_l", "order_nu", "inversion_sigma"]
+        if name not in ["o3_lambda", "order_nu", "o3_sigma"]
     )
 
     if other_keys_match is None:
@@ -404,9 +405,9 @@ def cg_combine(
     X_grads = {}
 
     # loops over sparse blocks of x_a
-    for index_a, block_a in x_a:
-        lam_a = index_a["spherical_harmonics_l"]
-        sigma_a = index_a["inversion_sigma"]
+    for index_a, block_a in x_a.items():
+        lam_a = index_a["o3_lambda"]
+        sigma_a = index_a["o3_sigma"]
         order_a = index_a["order_nu"]
         properties_a = (
             block_a.properties
@@ -414,9 +415,9 @@ def cg_combine(
         samples_a = block_a.samples
 
         # and x_b
-        for index_b, block_b in x_b:
-            lam_b = index_b["spherical_harmonics_l"]
-            sigma_b = index_b["inversion_sigma"]
+        for index_b, block_b in x_b.items():
+            lam_b = index_b["o3_lambda"]
+            sigma_b = index_b["o3_sigma"]
             order_b = index_b["order_nu"]
             properties_b = block_b.properties
             samples_b = block_b.samples
@@ -560,7 +561,7 @@ def cg_combine(
         nz_blk.append(newblock)
     X = TensorMap(
         Labels(
-            ["order_nu", "inversion_sigma", "spherical_harmonics_l"] + OTHER_KEYS,
+            ["order_nu", "o3_sigma", "o3_lambda"] + OTHER_KEYS,
             np.asarray(nz_idx, dtype=np.int32),
         ),
         nz_blk,
@@ -635,11 +636,11 @@ def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=Non
     # nu=1 features
     acdc_nu1 = acdc_standardize_keys(acdc_nu1)
     if neighbor_species is None:
-        acdc_nu1 = acdc_nu1.keys_to_properties("species_neighbor")
+        acdc_nu1 = acdc_nu1.keys_to_properties("neighbor_type")
     else:
         acdc_nu1 = acdc_nu1.keys_to_properties(
             keys_to_move=Labels(
-            names=("species_neighbor",),
+            names=("neighbor_type",),
             values=np.array(neighbor_species).reshape(-1, 1),
         )
     )
@@ -650,7 +651,7 @@ def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=Non
         acdc_nu1,
         clebsch_gordan=cg,
         lcut=rascal_hypers["basis"]["max_angular"],
-        other_keys_match=["species_center"],
+        other_keys_match=["center_type"],
     )
 
     return acdc_nu2
@@ -659,20 +660,20 @@ def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=Non
 def clean_lambda_soap(lsoap: TensorMap):
     """
     A function that performs some cleaning of the lambda-SOAP representation,
-        - Drop blocks with ``'inversion_sigma' = -1``
+        - Drop blocks with ``'o3_sigma' = -1``
         - Drop the key name 'order_nu' as they are all = 2, and also the key
-            name 'inversion_sigma' as they are now all = 1
+            name 'o3_sigma' as they are now all = 1
     """
 
     new_keys, new_blocks = [], []
-    for key, block in lsoap:
+    for key, block in lsoap.items():
         if key[1] == 1:
             new_keys.append([key[2], key[3]])
             new_blocks.append(block.copy())
 
     lsoap_cleaned = TensorMap(
         keys=Labels(
-            names=["spherical_harmonics_l", "species_center"], values=np.array(new_keys)
+            names=["o3_lambda", "center_type"], values=np.array(new_keys)
         ),
         blocks=new_blocks,
     )
@@ -711,7 +712,7 @@ def ps_normalize_gradient_inplace(idx, grad, values, norm, min_norm=MIN_NORM):
 
 
 def normalize_tensormap(soap, min_norm=MIN_NORM):
-    for key, block in soap:
+    for key, block in soap.items():
         norms = np.zeros(len(block.samples))
         for samp in block.samples:
             isamp = block.samples.position(samp)
@@ -739,8 +740,8 @@ def generate_lambda_soap_wrapper(mols: list, rascal_hypers: dict, neighbor_speci
 def remove_high_l(lsoap: TensorMap, lmax: dict):
     """
     A function that performs some cleaning of the lambda-SOAP representation,
-        - Drop the blocks ``('spherical_harmonics_l', 'species_center')``
-          if spherical_harmonics_l > lmax[species_center]
+        - Drop the blocks ``('o3_lambda', 'center_type')``
+          if o3_lambda > lmax[center_type]
     """
     new_keys, new_blocks = [], []
     for (l, q), block in lsoap:

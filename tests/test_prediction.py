@@ -11,7 +11,7 @@ def test_prediction():
     modelpath = path+'data/H2O_test'
     c = predict_sagpr(xyzfile, modelpath, printlvl=0, write=False, working_dir='', model_dir=path)
     c0 = np.loadtxt('tests/data/H2O.xyz.coeff.dat')
-    assert np.linalg.norm(c-c0) < 1e-12
+    assert np.allclose(c, c0)
 
 
 if __name__ == '__main__':
