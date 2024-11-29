@@ -13,7 +13,7 @@ import gc
 import glob
 import numpy as np
 import ase.io
-import equistore.core as equistore
+import metatensor
 from rho_predictor.lsoap import ps_normalize_inplace
 
 def get_ref_idx(mollist, refs):
@@ -51,7 +51,7 @@ def merge_ref_ps(idx, normalize=False):
         mol_id, atom_id  = ref
         q = mols[mol_id][atom_id].number
         ref_q[iref] = q
-        tensor = equistore.load(mollist[mol_id]+'.npz')
+        tensor = metatensor.load(mollist[mol_id]+'.npz')
 
         for l in range(lmax+1):
             key = (l, q)
@@ -72,16 +72,16 @@ def merge_ref_ps(idx, normalize=False):
         gc.collect()
 
     keys.remove((lmax,1))
-    tm_labels = equistore.Labels(tensor_keys_names, np.array(keys))
+    tm_labels = metatensor.Labels(tensor_keys_names, np.array(keys))
 
     for key in keys:
-        block_samp_label = equistore.Labels(['ref_env'], np.array(block_samp_label_vals[key]).reshape(-1,1))
-        blocks[key] = equistore.TensorBlock(values=np.array(blocks[key]),
+        block_samp_label = metatensor.Labels(['ref_env'], np.array(block_samp_label_vals[key]).reshape(-1,1))
+        blocks[key] = metatensor.TensorBlock(values=np.array(blocks[key]),
                                             samples=block_samp_label,
                                             components=block_comp_labels[key],
                                             properties=block_prop_labels[key])
 
-    tensor = equistore.TensorMap(keys=tm_labels, blocks=[blocks[key] for key in keys])
+    tensor = metatensor.TensorMap(keys=tm_labels, blocks=[blocks[key] for key in keys])
     return tensor, ref_q
 
 if __name__=='__main__':
@@ -95,5 +95,5 @@ if __name__=='__main__':
     tensor, ref_q = merge_ref_ps(idx, normalize=True)
     print(tensor)
 
-    equistore.save('reference_500.npz', tensor)
+    metatensor.save('reference_500.npz', tensor)
     np.save('reference_500_q.npy', ref_q)

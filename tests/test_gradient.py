@@ -3,7 +3,7 @@
 import os
 import numpy as np
 import ase.io
-import equistore.core as equistore
+import metatensor
 from rho_predictor.lsoap import generate_lambda_soap_wrapper
 from rho_predictor.rhoml import compute_kernel, compute_prediction
 from rho_predictor.rhotools import load_model
@@ -77,7 +77,7 @@ def test_gradient_kernel():
 
     model = load_model(modelpath)
     asemol = ase.io.read(xyzfile)
-    soap_ref = equistore.load(path+model.refsoapfile)
+    soap_ref = metatensor.load(path+model.refsoapfile)
     def testfunc(x):
         soap = generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=model.elements, normalize=True)
         kernel = compute_kernel(soap, soap_ref)
@@ -98,8 +98,8 @@ def test_gradient_prediction():
 
     model = load_model(modelpath)
     asemol = ase.io.read(xyzfile)
-    soap_ref = equistore.load(path+model.refsoapfile)
-    weights = equistore.load(path+model.weightsfile)
+    soap_ref = metatensor.load(path+model.refsoapfile)
+    weights = metatensor.load(path+model.weightsfile)
     def testfunc(x):
         soap = generate_lambda_soap_wrapper(x, model.rascal_hypers, neighbor_species=model.elements, normalize=True)
         kernel = compute_kernel(soap, soap_ref)

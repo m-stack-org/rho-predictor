@@ -2,7 +2,7 @@
 
 import sys
 import numpy as np
-import equistore.core as equistore
+import metatensor
 from rho_predictor.lsoap import ps_normalize_inplace
 
 
@@ -11,7 +11,7 @@ if __name__=='__main__':
     qs = [1, 6, 7, 8, 16]
     normalize = True
 
-    tensor = equistore.load(sys.argv[1])
+    tensor = metatensor.load(sys.argv[1])
     i = int(sys.argv[2])
 
     for l in range(lmax+1):

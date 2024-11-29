@@ -3,8 +3,8 @@
 import re
 import numpy as np
 import wigners
-from rascaline import SphericalExpansion
-from equistore.core import Labels, TensorBlock, TensorMap
+from featomic import SphericalExpansion
+from metatensor import Labels, TensorBlock, TensorMap
 
 # === CG Iteration code, copied into a single place.
 
@@ -627,7 +627,7 @@ def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=Non
 
     # Generate Rascaline hypers and Clebsch-Gordon coefficients
     calculator = SphericalExpansion(**rascal_hypers)
-    cg = ClebschGordanReal(l_max=rascal_hypers["max_angular"])
+    cg = ClebschGordanReal(l_max=rascal_hypers["basis"]["max_angular"])
 
     # Generate descriptor via Spherical Expansion
     acdc_nu1 = calculator.compute(frames, gradients=gradients)
@@ -649,7 +649,7 @@ def generate_lambda_soap(frames: list, rascal_hypers: dict, neighbor_species=Non
         acdc_nu1,
         acdc_nu1,
         clebsch_gordan=cg,
-        lcut=rascal_hypers["max_angular"],
+        lcut=rascal_hypers["basis"]["max_angular"],
         other_keys_match=["species_center"],
     )
 
@@ -757,11 +757,24 @@ def remove_high_l(lsoap: TensorMap, lmax: dict):
 
 def make_rascal_hypers(soap_rcut, soap_ncut, soap_lcut, soap_sigma):
     return {
-        "cutoff": soap_rcut,
-        "max_radial": soap_ncut,
-        "max_angular": soap_lcut,
-        "atomic_gaussian_width": soap_sigma,
-        "radial_basis": {"Gto": {}},
-        "cutoff_function": {"ShiftedCosine": {"width": 0.5}},
-        "center_atom_weight": 1.0,
-    }
+           "cutoff": {
+               "radius": soap_rcut,
+               "smoothing": {
+                   "type": "ShiftedCosine",
+                   "width": 0.5,
+               }
+           },
+           "density": {
+               "type": "Gaussian",
+               "width": soap_sigma,
+               "center_atom_weight": 1.0,
+           },
+           "basis": {
+               "type": "TensorProduct",
+               "max_angular": soap_lcut,
+               "radial": {
+                   "type": "Gto",
+                   "max_radial": soap_ncut,
+               }
+           }
+       }

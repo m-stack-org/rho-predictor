@@ -1,18 +1,19 @@
-name: mstack
+name: mstack-good
 channels:
   - conda-forge
   - defaults
 dependencies:
   - pytest=7.3
-  - python=3.9
+  - python=3.11
   - numpy=1.23
   - pip=23.0
-  - scipy=1.9
+  - scipy=1.10
   - setuptools=65.6
   - pip:
     - ase==3.22
     - pyscf==2.1
     - wigners==0.3
-    - git+https://github.com/lcmd-epfl/Q-stack.git@f3cac36
-    - git+https://github.com/lab-cosmo/equistore.git@e5b9dc365369ba2584ea01e9d6a4d648008aaab8#subdirectory=python/equistore-core
-    - git+https://github.com/lab-cosmo/rascaline.git@87a361487b57345def5bad9cc668dc6f54b158f6
+    - metatensor-core==0.1.11
+    - git+https://github.com/metatensor/featomic.git@4968429ece4f5fc7935047d0c2e813cac21018ab
+    - git+https://github.com/lcmd-epfl/Q-stack.git@mstack
+    #- git+https://github.com/lab-cosmo/equistore.git@e5b9dc365369ba2584ea01e9d6a4d648008aaab8#subdirectory=python/equistore-core

@@ -2,7 +2,7 @@
 
 import numpy as np
 from pyscf import gto
-import equistore.core as equistore
+import metatensor
 from qstack import equio
 import qstack
 
@@ -21,4 +21,4 @@ except:
 weights = qstack.tools.gpr2pyscf(mol, weights)
 tensor = equio.array_to_tensormap(mol, weights)
 print(np.linalg.norm(weights - equio.tensormap_to_array(mol, tensor)))
-equistore.save('weights.npz', tensor)
+metatensor.save('weights.npz', tensor)

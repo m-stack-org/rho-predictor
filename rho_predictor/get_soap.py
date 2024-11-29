@@ -2,7 +2,7 @@
 
 import argparse
 import ase.io
-import equistore.core as equistore
+import metatensor
 from rho_predictor.lsoap import generate_lambda_soap_wrapper, make_rascal_hypers
 
 
@@ -35,7 +35,7 @@ def main():
     soap = generate_lambda_soap_wrapper(asemol, rascal_hypers, neighbor_species=args.elements,
                                         normalize=(not args.dontnormalize), lmax=lmax,
                                         gradients=(['positions'] if args.gradient else None))
-    equistore.save(args.save if args.save[-4:]=='.npz' else args.save+'.npz', soap)
+    metatensor.save(args.save if args.save[-4:]=='.npz' else args.save+'.npz', soap)
 
 
 if __name__ == '__main__':

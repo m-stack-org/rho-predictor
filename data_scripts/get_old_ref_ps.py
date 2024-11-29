@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
 '''
-Loads old PS files and saves the reference PS in the equistore format
+Loads old PS files and saves the reference PS in the metatensor format
 '''
 
 import gc
 import glob
 import numpy as np
 import ase.io
-import equistore.core as equistore
+import metatensor
 
 
 def convert_to_tmap(pslist, ref_q):
@@ -36,12 +36,12 @@ def convert_to_tmap(pslist, ref_q):
 
     keys.remove((lmax,1))
 
-    tm_labels = equistore.Labels(('spherical_harmonics_l', 'species_center'), np.array(keys))
-    block_comp_labels = {key: equistore.Labels(('spherical_harmonics_m',), block_comp_label_vals[key]) for key in keys}
-    block_prop_labels = {key: equistore.Labels(('prop_number',),           block_prop_label_vals[key]) for key in keys}
-    block_samp_labels = {key: equistore.Labels(('ref_env',),               block_samp_label_vals[key]) for key in keys}
-    blocks = {key: equistore.TensorBlock(values=blocks[key], samples=block_samp_labels[key], components=[block_comp_labels[key]], properties=block_prop_labels[key]) for key in keys}
-    tensor = equistore.TensorMap(keys=tm_labels, blocks=[blocks[key] for key in keys])
+    tm_labels = metatensor.Labels(('spherical_harmonics_l', 'species_center'), np.array(keys))
+    block_comp_labels = {key: metatensor.Labels(('spherical_harmonics_m',), block_comp_label_vals[key]) for key in keys}
+    block_prop_labels = {key: metatensor.Labels(('prop_number',),           block_prop_label_vals[key]) for key in keys}
+    block_samp_labels = {key: metatensor.Labels(('ref_env',),               block_samp_label_vals[key]) for key in keys}
+    blocks = {key: metatensor.TensorBlock(values=blocks[key], samples=block_samp_labels[key], components=[block_comp_labels[key]], properties=block_prop_labels[key]) for key in keys}
+    tensor = metatensor.TensorMap(keys=tm_labels, blocks=[blocks[key] for key in keys])
     return tensor
 
 if __name__=='__main__':
@@ -49,4 +49,4 @@ if __name__=='__main__':
     pslist = ['PS_REF/PS'+str(l)+'_1000.npy' for l in range(lmax+1)]
     ref_q = np.load('reference_q.npy')
     tensor = convert_to_tmap(pslist, ref_q)
-    equistore.save('reference_old.npz', tensor)
+    metatensor.save('reference_old.npz', tensor)

@@ -1,5 +1,5 @@
 import numpy as np
-import equistore.core as equistore
+import metatensor
 
 
 def compute_kernel(soap, soap_ref):
@@ -7,23 +7,23 @@ def compute_kernel(soap, soap_ref):
     # Compute kernel
     keys = keys_intersection(soap, soap_ref)
     kblocks = []
-    tm_labels = equistore.Labels(soap.keys.names, keys)
+    tm_labels = metatensor.Labels(soap.keys.names, keys)
     for key in tm_labels:
         sblock = soap.block(key)
         rblock = soap_ref.block(key)
-        samples = equistore.Labels(soap.sample_names[1:2], sblock.samples.asarray()[:,[1]])
-        components = [equistore.Labels([soap.components_names[0][0]+str(i)], sblock.components[0].asarray()) for i in [1,2]]
+        samples = metatensor.Labels(soap.sample_names[1:2], sblock.samples.asarray()[:,[1]])
+        components = [metatensor.Labels([soap.components_names[0][0]+str(i)], sblock.components[0].asarray()) for i in [1,2]]
         values = np.einsum('rmx,aMx->aMmr', rblock.values, sblock.values)
-        kblock = equistore.TensorBlock(values=values, samples=samples, components=components, properties=rblock.samples)
+        kblock = metatensor.TensorBlock(values=values, samples=samples, components=components, properties=rblock.samples)
         if sblock.has_gradient('positions'):
             sgrad = sblock.gradient('positions')
             gvalues = np.einsum('rmx,adMx->adMmr', rblock.values, sgrad.values)
-            kgrad = equistore.TensorBlock(values=gvalues, samples=sgrad.samples,
+            kgrad = metatensor.TensorBlock(values=gvalues, samples=sgrad.samples,
                                           components=sgrad.components[0:1]+components,
                                           properties=kblock.properties)
             kblock.add_gradient('positions', kgrad)
         kblocks.append(kblock)
-    kernel = equistore.TensorMap(keys=tm_labels, blocks=kblocks)
+    kernel = metatensor.TensorMap(keys=tm_labels, blocks=kblocks)
 
     # Normalize with zeta=2, mind the loop direction
     elements = np.unique(tm_labels.asarray()[:,1])
@@ -58,23 +58,23 @@ def compute_prediction(kernel, weights, averages=None):
 
     cblocks = []
     keys = keys_intersection(kernel, weights)
-    tm_labels = equistore.Labels(kernel.keys.names, keys)
+    tm_labels = metatensor.Labels(kernel.keys.names, keys)
     for key in tm_labels:
         kblock = kernel.block(key)
         wblock = weights.block(key)
         values = np.einsum('amMr,rMn->amn', kblock.values, wblock.values)
         if averages and key[0]==0:
             values += averages.block(species_center=key[1]).values
-        cblock = equistore.TensorBlock(values=values, samples=kblock.samples,
+        cblock = metatensor.TensorBlock(values=values, samples=kblock.samples,
                                        components=wblock.components, properties=wblock.properties)
 
         if kblock.has_gradient('positions'):
             kgrad = kblock.gradient('positions')
             gvalues = np.einsum('admMr,rMn->admn', kgrad.values, wblock.values)
-            cgrad = equistore.TensorBlock(values=gvalues, samples=kgrad.samples,
+            cgrad = metatensor.TensorBlock(values=gvalues, samples=kgrad.samples,
                                           components=kgrad.components[0:1]+cblock.components, properties=cblock.properties)
             cblock.add_gradient('positions', cgrad)
         cblocks.append(cblock)
 
-    coeffs = equistore.TensorMap(keys=tm_labels, blocks=cblocks)
+    coeffs = metatensor.TensorMap(keys=tm_labels, blocks=cblocks)
     return coeffs

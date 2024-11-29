@@ -2,7 +2,7 @@
 
 import numpy as np
 from pyscf import data
-import equistore.core as equistore
+import metatensor
 from qstack import equio
 
 elements = [1, 6, 7, 8, 16]
@@ -16,11 +16,11 @@ for q in elements:
     prop_label_vals = np.arange(values.shape[-1]).reshape(-1,1)
     samp_label_vals = np.array([[0]])
     comp_label_vals = np.array([[0]])
-    properties = equistore.Labels(equio.vector_label_names.block_prop, prop_label_vals)
-    samples    = equistore.Labels(equio.vector_label_names.block_samp, samp_label_vals)
-    components = [equistore.Labels(equio.vector_label_names.block_comp, comp_label_vals)]
-    tensor_blocks.append(equistore.TensorBlock(values=values, samples=samples, components=components, properties=properties))
-tm_labels = equistore.Labels(equio.vector_label_names.tm, np.array(tm_label_vals))
-tensor = equistore.TensorMap(keys=tm_labels, blocks=tensor_blocks)
+    properties = metatensor.Labels(equio.vector_label_names.block_prop, prop_label_vals)
+    samples    = metatensor.Labels(equio.vector_label_names.block_samp, samp_label_vals)
+    components = [metatensor.Labels(equio.vector_label_names.block_comp, comp_label_vals)]
+    tensor_blocks.append(metatensor.TensorBlock(values=values, samples=samples, components=components, properties=properties))
+tm_labels = metatensor.Labels(equio.vector_label_names.tm, np.array(tm_label_vals))
+tensor = metatensor.TensorMap(keys=tm_labels, blocks=tensor_blocks)
 
-equistore.save('averages.npz', tensor)
+metatensor.save('averages.npz', tensor)
