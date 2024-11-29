@@ -4,20 +4,20 @@ A tool to predict the electronic density of molecules using a SA-GPR model
 
 ## Requirements
 
-- [Q-stack](https://github.com/m-stack-org/Q-stack)
-- [equistore](https://github.com/m-stack-org/equistore)
-- [rascaline](https://github.com/m-stack-org/rascaline)
+- [Q-stack](https://github.com/lcmd-epfl/Q-stack)
+- [metatensor](https://github.com/metatensor/metatensor)
+- [featomic](https://github.com/metatensor/featomic)
 
 ## Installation
 
 You can install it by runing the comand:
 
 ```
-pip install git+https://github.com/lcmd-epfl/rho-prediction.git
+pip install git+https://github.com/m-stack-org/rho-prediction.git
 ```
 ## Before usage
 
-Please be sure you have the weights and averages of a pre-trained model.  
+Please be sure you have the weights and averages of a pre-trained model.
 
 TODO: how to add the data
 
@@ -35,9 +35,9 @@ python -m  rho_predictor.predictor path/to/mol.xyz bfdb_HCNO
 
 ## Acknowledgements
 
-The authors acknowledge the National Centre of Competence in Research (NCCR) "Materials' Revolution: Computational Design 
-and Discovery of Novel Materials (MARVEL)" of the Swiss National Science Foundation (SNSF, grant number 182892) and the 
-European Research Council (ERC, grant agreement no 817977). 
+The authors acknowledge the National Centre of Competence in Research (NCCR) "Materials' Revolution: Computational Design
+and Discovery of Novel Materials (MARVEL)" of the Swiss National Science Foundation (SNSF, grant number 182892) and the
+European Research Council (ERC, grant agreement no 817977).
 
 ## References
 
