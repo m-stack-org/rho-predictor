@@ -26,7 +26,7 @@ def get_num_gradient(asemol, func, dr=1e-4, verbose=True):
             r[atom,idir] = r0
             asemol.set_positions(r)
 
-            for key, block in s1:
+            for key, block in s1.items():
                 block.values[...] -= s2[key].values
                 block.values[...] *= 0.5/dr
             gradnum[atom][idir] = s1
@@ -36,7 +36,7 @@ def get_num_gradient(asemol, func, dr=1e-4, verbose=True):
 
 
 def check_gradients(soap, gradnum, max_diff=1e-6, verbose=True):
-    for key, block in soap:
+    for key, block in soap.items():
         if verbose:
             print(f'{key=}')
         gblock = soap[key].gradient('positions')
