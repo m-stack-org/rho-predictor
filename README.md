@@ -13,7 +13,7 @@ A tool to predict the electronic density of molecules using a SA-GPR model
 You can install it by runing the comand:
 
 ```
-pip install git+https://github.com/m-stack-org/rho-prediction.git
+pip install git+https://github.com/m-stack-org/rho-predictor.git
 ```
 ## Before usage
 
